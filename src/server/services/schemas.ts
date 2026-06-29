@@ -7,7 +7,9 @@ import {
   GoalStatus,
   JobStatus,
   JobType,
-  MovementPattern
+  MovementPattern,
+  SetStatus,
+  WorkoutStatus
 } from "@prisma/client";
 import { z } from "zod";
 
@@ -111,6 +113,69 @@ export const enqueueJobInputSchema = z.object({
   type: z.nativeEnum(JobType)
 });
 
+const logWorkoutStatusSchema = z.union([
+  z.literal(WorkoutStatus.COMPLETED),
+  z.literal(WorkoutStatus.PARTIAL),
+  z.literal(WorkoutStatus.SKIPPED)
+]);
+
+export const intensityAdjustmentSchema = z
+  .union([z.literal("AS_PLANNED"), z.literal("REDUCED"), z.literal("INCREASED")])
+  .default("AS_PLANNED");
+
+export const logWorkoutSetInputSchema = z.object({
+  actualDistanceMeters: z.number().int().nonnegative().optional(),
+  actualDurationSeconds: z.number().int().nonnegative().optional(),
+  actualReps: z.number().int().nonnegative().optional(),
+  actualRir: decimalNumberSchema,
+  actualRpe: decimalNumberSchema,
+  actualWeightKg: decimalNumberSchema,
+  notes: z.string().trim().optional(),
+  painFlag: z.boolean().default(false),
+  plannedWorkoutSetId: z.string().min(1),
+  status: z.nativeEnum(SetStatus).default(SetStatus.COMPLETED)
+});
+
+export const logWorkoutExerciseInputSchema = z
+  .object({
+    notes: z.string().trim().optional(),
+    plannedWorkoutExerciseId: z.string().min(1),
+    sets: z.array(logWorkoutSetInputSchema).default([]),
+    substitutionExerciseName: z.string().trim().optional(),
+    substitutionReason: z.string().trim().optional()
+  })
+  .superRefine((input, context) => {
+    if (input.substitutionExerciseName && !input.substitutionReason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Substitution reason is required.",
+        path: ["substitutionReason"]
+      });
+    }
+  });
+
+export const completeWorkoutInputSchema = z
+  .object({
+    durationAdjustmentMinutes: z.number().int().optional(),
+    exercises: z.array(logWorkoutExerciseInputSchema).default([]),
+    intensityAdjustment: intensityAdjustmentSchema,
+    overallRpe: decimalNumberSchema,
+    painNotes: z.string().trim().optional(),
+    plannedWorkoutId: z.string().min(1),
+    skipReason: z.string().trim().optional(),
+    status: logWorkoutStatusSchema,
+    userNotes: z.string().trim().optional()
+  })
+  .superRefine((input, context) => {
+    if (input.status === WorkoutStatus.SKIPPED && !input.skipReason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Skip reason is required.",
+        path: ["skipReason"]
+      });
+    }
+  });
+
 export type UpsertProfileInput = z.infer<typeof upsertProfileInputSchema>;
 export type CreateGoalInput = z.infer<typeof createGoalInputSchema>;
 export type CreateEquipmentInput = z.infer<typeof createEquipmentInputSchema>;
@@ -126,3 +191,4 @@ export type SetExercisePreferenceInput = z.infer<
 >;
 export type FilterExercisesInput = z.infer<typeof filterExercisesInputSchema>;
 export type EnqueueJobInput = z.input<typeof enqueueJobInputSchema>;
+export type CompleteWorkoutInput = z.infer<typeof completeWorkoutInputSchema>;
