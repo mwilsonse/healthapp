@@ -58,7 +58,13 @@ const plannedWorkoutFixture = {
   workoutType: "strength"
 };
 
-function fixtureForSchema(schemaName: string) {
+function objectValue(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function fixtureForSchema(schemaName: string, input?: unknown) {
   if (schemaName === "TrainingPlanOutputV1") {
     return {
       endDate: new Date("2026-01-18T12:00:00.000Z").toISOString(),
@@ -111,8 +117,37 @@ function fixtureForSchema(schemaName: string) {
   }
 
   if (schemaName === "CoachChatOutputV1") {
+    const context = objectValue(input);
+    const currentWorkout = objectValue(context.currentWorkout);
+    const currentWorkoutId =
+      typeof currentWorkout.id === "string" ? currentWorkout.id : undefined;
+    const currentWorkoutStatus =
+      typeof currentWorkout.status === "string"
+        ? currentWorkout.status
+        : undefined;
+
     return {
-      actions: [],
+      actions: currentWorkoutId
+        ? currentWorkoutStatus === "PLANNED"
+          ? [
+              {
+                confirmationRequired: true,
+                description:
+                  "Start the currently planned workout so set logging is available.",
+                input: { plannedWorkoutId: currentWorkoutId },
+                type: "start_workout"
+              }
+            ]
+          : []
+        : [
+            {
+              confirmationRequired: true,
+              description:
+                "Generate today's workout from the active plan and saved equipment.",
+              input: {},
+              type: "generate_today_workout"
+            }
+          ],
       message:
         "I can help adjust the plan, but I will ask before changing saved data."
     };
@@ -127,7 +162,7 @@ export const fakeAiProvider: AiProvider = {
   ): Promise<AiProviderResponse> {
     return {
       model: "fake-deterministic-v1",
-      output: fixtureForSchema(request.schemaName),
+      output: fixtureForSchema(request.schemaName, request.input),
       provider: "fake",
       tokenUsage: {
         inputTokens: 0,

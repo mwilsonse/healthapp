@@ -12,7 +12,8 @@ import {
   Sparkles
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { CoachChat, type CoachChatActionUi } from "@/features/coach/coach-chat";
 import { generateTodayWorkoutAction } from "@/features/planning/actions";
 import {
   completeWorkoutAction,
@@ -20,7 +21,7 @@ import {
   startWorkoutAction
 } from "@/features/workouts/actions";
 import { formatPoundsFromKilograms } from "@/lib/units";
-import { jobService, workoutService } from "@/server/services";
+import { coachService, jobService, workoutService } from "@/server/services";
 
 interface TodayPageProps {
   searchParams?: Promise<{ error?: string }>;
@@ -110,7 +111,7 @@ function fieldClassName() {
 }
 
 function smallFieldClassName() {
-  return "h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring";
+  return "h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 }
 
 function statusLabel(status: WorkoutStatus) {
@@ -175,7 +176,11 @@ function jobInput(job: Job) {
     : {};
 }
 
-function latestRelatedJob(jobs: Job[], type: JobType, plannedWorkoutId: string) {
+function latestRelatedJob(
+  jobs: Job[],
+  type: JobType,
+  plannedWorkoutId: string
+) {
   return jobs.find((job) => {
     const input = jobInput(job);
 
@@ -183,10 +188,26 @@ function latestRelatedJob(jobs: Job[], type: JobType, plannedWorkoutId: string) 
   });
 }
 
+function chatActionUi(actions: CoachChatActionUi[]): CoachChatActionUi[] {
+  return actions.map((action) => ({
+    description: action.description,
+    id: action.id,
+    status: action.status,
+    statusLabel: action.statusLabel,
+    type: action.type
+  }));
+}
+
 export default async function TodayPage({ searchParams }: TodayPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const workoutResult = await workoutService.getTodayWorkoutWithDetails();
+  const [workoutResult, chatActionsResult] = await Promise.all([
+    workoutService.getTodayWorkoutWithDetails(),
+    coachService.listRecentChatActions()
+  ]);
   const workout = workoutResult.ok ? workoutResult.data : null;
+  const initialChatActions = chatActionsResult.ok
+    ? chatActionUi(chatActionsResult.data)
+    : [];
 
   if (!workout) {
     return (
@@ -213,12 +234,14 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
             </p>
           </div>
           <form action={generateTodayWorkoutAction}>
-            <Button className="mt-4" type="submit">
+            <SubmitButton className="mt-4" pendingLabel="Generating">
               <Sparkles aria-hidden="true" className="mr-2 h-4 w-4" />
               Generate today
-            </Button>
+            </SubmitButton>
           </form>
         </div>
+
+        <CoachChat initialActions={initialChatActions} />
       </section>
     );
   }
@@ -282,30 +305,31 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
         <div className="flex flex-wrap gap-2">
           {canStart ? (
             <form action={startWorkoutAction}>
-              <input
-                name="plannedWorkoutId"
-                type="hidden"
-                value={workout.id}
-              />
-              <Button type="submit">
+              <input name="plannedWorkoutId" type="hidden" value={workout.id} />
+              <SubmitButton pendingLabel="Starting">
                 <Play aria-hidden="true" className="h-4 w-4" />
                 Start
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
 
           {canStart ? (
             <form action={generateTodayWorkoutAction}>
-              <Button type="submit" variant="outline">
+              <SubmitButton pendingLabel="Regenerating" variant="outline">
                 <CalendarPlus aria-hidden="true" className="h-4 w-4" />
                 Regenerate
-              </Button>
+              </SubmitButton>
             </form>
           ) : null}
         </div>
       </div>
 
       <PageError message={resolvedSearchParams.error} />
+
+      <CoachChat
+        initialActions={initialChatActions}
+        plannedWorkoutId={workout.id}
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
@@ -392,167 +416,177 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
           id="workout-log-form"
         >
           <input name="plannedWorkoutId" type="hidden" value={workout.id} />
-        <div className="space-y-3">
-          {workout.exercises.map((exercise) => (
-            <article
-              className="rounded-lg border border-border bg-card p-4 shadow-sm"
-              key={exercise.id}
-            >
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="font-medium">{exercise.nameSnapshot}</h3>
-                {exercise.restSeconds ? (
-                  <p className="text-sm text-muted-foreground">
-                    Rest {Math.round(exercise.restSeconds / 60)} min
+          <div className="space-y-3">
+            {workout.exercises.length === 0 ? (
+              <div className="rounded-lg border border-border bg-card p-4 text-sm leading-6 text-muted-foreground shadow-sm">
+                No exercises were stored for this workout. Regenerate the
+                workout before training.
+              </div>
+            ) : null}
+            {workout.exercises.map((exercise) => (
+              <article
+                className="rounded-lg border border-border bg-card p-4 shadow-sm"
+                key={exercise.id}
+              >
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="font-medium">{exercise.nameSnapshot}</h3>
+                  {exercise.restSeconds ? (
+                    <p className="text-sm text-muted-foreground">
+                      Rest {Math.round(exercise.restSeconds / 60)} min
+                    </p>
+                  ) : null}
+                </div>
+                {exercise.notes ? (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {exercise.notes}
                   </p>
                 ) : null}
-              </div>
-              {exercise.notes ? (
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {exercise.notes}
-                </p>
-              ) : null}
 
-              {canLog ? (
-                <input
-                  name="plannedWorkoutExerciseId"
-                  type="hidden"
-                  value={exercise.id}
-                />
-              ) : null}
-
-              {canLog ? (
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <label className="text-sm">
-                    <span className="text-muted-foreground">
-                      Substitute exercise
-                    </span>
-                    <input
-                      className={`${fieldClassName()} mt-1`}
-                      name={`substitutionExerciseName:${exercise.id}`}
-                      placeholder={exercise.nameSnapshot}
-                      type="text"
-                    />
-                  </label>
-                  <label className="text-sm md:col-span-2">
-                    <span className="text-muted-foreground">
-                      Substitution reason
-                    </span>
-                    <input
-                      className={`${fieldClassName()} mt-1`}
-                      name={`substitutionReason:${exercise.id}`}
-                      placeholder="Reason"
-                      type="text"
-                    />
-                  </label>
-                </div>
-              ) : null}
-
-              <div className="mt-3 divide-y divide-border rounded-md border border-border">
-                {exercise.sets.map((set) => (
-                  <div
-                    className="grid gap-3 px-3 py-3 text-sm"
-                    key={set.id}
-                  >
-                    <div className="grid gap-2 md:grid-cols-[4rem_1fr] md:items-center">
-                      <span className="font-medium">
-                        Set {set.orderIndex + 1}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {targetLine(set) || "Target not set"}
-                      </span>
-                    </div>
-                    {set.notes ? (
-                      <span className="text-xs leading-5 text-muted-foreground">
-                        {set.notes}
-                      </span>
-                    ) : null}
-                    {canLog ? (
-                      <div className="grid gap-2 md:grid-cols-[7rem_repeat(4,minmax(0,1fr))_6rem]">
-                        <input
-                          name={`plannedWorkoutSetId:${exercise.id}`}
-                          type="hidden"
-                          value={set.id}
-                        />
-                        <select
-                          className={smallFieldClassName()}
-                          name={`setStatus:${set.id}`}
-                        >
-                          <option value="COMPLETED">Logged</option>
-                          <option value="SKIPPED">Skipped</option>
-                        </select>
-                        <input
-                          className={smallFieldClassName()}
-                          defaultValue={set.targetReps ?? ""}
-                          min="0"
-                          name={`actualReps:${set.id}`}
-                          placeholder="Reps"
-                          type="number"
-                        />
-                        <input
-                          className={smallFieldClassName()}
-                          defaultValue={
-                            set.targetWeightKg
-                              ? Number(set.targetWeightKg).toFixed(1)
-                              : ""
-                          }
-                          min="0"
-                          name={`actualWeightKg:${set.id}`}
-                          placeholder="Kg"
-                          step="0.1"
-                          type="number"
-                        />
-                        <input
-                          className={smallFieldClassName()}
-                          defaultValue={
-                            set.targetDurationSeconds
-                              ? Math.round(set.targetDurationSeconds)
-                              : ""
-                          }
-                          min="0"
-                          name={`actualDurationSeconds:${set.id}`}
-                          placeholder="Sec"
-                          type="number"
-                        />
-                        <input
-                          className={smallFieldClassName()}
-                          defaultValue={
-                            set.targetRpe ? Number(set.targetRpe).toFixed(1) : ""
-                          }
-                          min="0"
-                          name={`actualRpe:${set.id}`}
-                          placeholder="RPE"
-                          step="0.5"
-                          type="number"
-                        />
-                        <label className="flex h-9 items-center gap-2 rounded-md border border-border px-2 text-xs">
-                          <input name={`painFlag:${set.id}`} type="checkbox" />
-                          Pain
-                        </label>
-                        <input
-                          className={`${smallFieldClassName()} md:col-span-6`}
-                          name={`setNotes:${set.id}`}
-                          placeholder="Set notes"
-                          type="text"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-
-              {canLog ? (
-                <label className="mt-3 block text-sm">
-                  <span className="text-muted-foreground">Exercise notes</span>
+                {canLog ? (
                   <input
-                    className={`${fieldClassName()} mt-1`}
-                    name={`exerciseNotes:${exercise.id}`}
-                    type="text"
+                    name="plannedWorkoutExerciseId"
+                    type="hidden"
+                    value={exercise.id}
                   />
-                </label>
-              ) : null}
-            </article>
-          ))}
-        </div>
+                ) : null}
+
+                {canLog ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <label className="text-sm">
+                      <span className="text-muted-foreground">
+                        Substitute exercise
+                      </span>
+                      <input
+                        className={`${fieldClassName()} mt-1`}
+                        name={`substitutionExerciseName:${exercise.id}`}
+                        placeholder={exercise.nameSnapshot}
+                        type="text"
+                      />
+                    </label>
+                    <label className="text-sm md:col-span-2">
+                      <span className="text-muted-foreground">
+                        Substitution reason
+                      </span>
+                      <input
+                        className={`${fieldClassName()} mt-1`}
+                        name={`substitutionReason:${exercise.id}`}
+                        placeholder="Reason"
+                        type="text"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
+                <div className="mt-3 divide-y divide-border rounded-md border border-border">
+                  {exercise.sets.map((set) => (
+                    <div className="grid gap-3 px-3 py-3 text-sm" key={set.id}>
+                      <div className="grid gap-2 md:grid-cols-[4rem_1fr] md:items-center">
+                        <span className="font-medium">
+                          Set {set.orderIndex + 1}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {targetLine(set) || "Target not set"}
+                        </span>
+                      </div>
+                      {set.notes ? (
+                        <span className="text-xs leading-5 text-muted-foreground">
+                          {set.notes}
+                        </span>
+                      ) : null}
+                      {canLog ? (
+                        <div className="grid gap-2 md:grid-cols-[7rem_repeat(4,minmax(0,1fr))_6rem]">
+                          <input
+                            name={`plannedWorkoutSetId:${exercise.id}`}
+                            type="hidden"
+                            value={set.id}
+                          />
+                          <select
+                            className={smallFieldClassName()}
+                            name={`setStatus:${set.id}`}
+                          >
+                            <option value="COMPLETED">Logged</option>
+                            <option value="SKIPPED">Skipped</option>
+                          </select>
+                          <input
+                            className={smallFieldClassName()}
+                            defaultValue={set.targetReps ?? ""}
+                            min="0"
+                            name={`actualReps:${set.id}`}
+                            placeholder="Reps"
+                            type="number"
+                          />
+                          <input
+                            className={smallFieldClassName()}
+                            defaultValue={
+                              set.targetWeightKg
+                                ? Number(set.targetWeightKg).toFixed(1)
+                                : ""
+                            }
+                            min="0"
+                            name={`actualWeightKg:${set.id}`}
+                            placeholder="Kg"
+                            step="0.1"
+                            type="number"
+                          />
+                          <input
+                            className={smallFieldClassName()}
+                            defaultValue={
+                              set.targetDurationSeconds
+                                ? Math.round(set.targetDurationSeconds)
+                                : ""
+                            }
+                            min="0"
+                            name={`actualDurationSeconds:${set.id}`}
+                            placeholder="Sec"
+                            type="number"
+                          />
+                          <input
+                            className={smallFieldClassName()}
+                            defaultValue={
+                              set.targetRpe
+                                ? Number(set.targetRpe).toFixed(1)
+                                : ""
+                            }
+                            min="0"
+                            name={`actualRpe:${set.id}`}
+                            placeholder="RPE"
+                            step="0.5"
+                            type="number"
+                          />
+                          <label className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-xs">
+                            <input
+                              name={`painFlag:${set.id}`}
+                              type="checkbox"
+                            />
+                            Pain
+                          </label>
+                          <input
+                            className={`${smallFieldClassName()} md:col-span-6`}
+                            name={`setNotes:${set.id}`}
+                            placeholder="Set notes"
+                            type="text"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+
+                {canLog ? (
+                  <label className="mt-3 block text-sm">
+                    <span className="text-muted-foreground">
+                      Exercise notes
+                    </span>
+                    <input
+                      className={`${fieldClassName()} mt-1`}
+                      name={`exerciseNotes:${exercise.id}`}
+                      type="text"
+                    />
+                  </label>
+                ) : null}
+              </article>
+            ))}
+          </div>
           {canLog ? (
             <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <h2 className="text-base font-semibold">Finish workout</h2>
@@ -585,19 +619,23 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
                 </label>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button name="completionStatus" type="submit" value="COMPLETED">
+                <SubmitButton
+                  name="completionStatus"
+                  pendingLabel="Saving"
+                  value="COMPLETED"
+                >
                   <Check aria-hidden="true" className="h-4 w-4" />
                   Complete
-                </Button>
-                <Button
+                </SubmitButton>
+                <SubmitButton
                   name="completionStatus"
-                  type="submit"
+                  pendingLabel="Saving"
                   value="PARTIAL"
                   variant="outline"
                 >
                   <Minus aria-hidden="true" className="h-4 w-4" />
                   Save partial
-                </Button>
+                </SubmitButton>
               </div>
             </section>
           ) : null}
@@ -621,9 +659,13 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
               placeholder="Notes"
               type="text"
             />
-            <Button className="w-fit" type="submit" variant="outline">
+            <SubmitButton
+              className="w-fit"
+              pendingLabel="Skipping"
+              variant="outline"
+            >
               Skip
-            </Button>
+            </SubmitButton>
           </form>
         </section>
       ) : null}
