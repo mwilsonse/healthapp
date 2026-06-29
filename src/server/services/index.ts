@@ -1,0 +1,12 @@
+export { aiRecommendationService } from "@/server/services/ai-recommendation-service";
+export { coachService } from "@/server/services/coach-service";
+export { equipmentService } from "@/server/services/equipment-service";
+export { exerciseService } from "@/server/services/exercise-service";
+export { exportService } from "@/server/services/export-service";
+export { goalService } from "@/server/services/goal-service";
+export { jobService } from "@/server/services/job-service";
+export { planningService } from "@/server/services/planning-service";
+export { profileService } from "@/server/services/profile-service";
+export { workoutService } from "@/server/services/workout-service";
+export type { ServiceError, ServiceResult } from "@/server/services/service-result";
+export { failure, success, validationFailure } from "@/server/services/service-result";
