@@ -8,7 +8,14 @@ export default defineConfig({
     trace: "on-first-retry"
   },
   webServer: {
-    command: "pnpm dev",
+    command: "pnpm run build && pnpm start",
+    env: {
+      APP_BASE_URL: "http://localhost:3000",
+      APP_SECRET: "test-secret",
+      DATABASE_URL:
+        "postgresql://phip:phip-dev-password@localhost:5432/phip?schema=public"
+    },
+    timeout: 120_000,
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI
   },

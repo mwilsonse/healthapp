@@ -11,11 +11,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 
-export const decimalNumberSchema = z
-  .number()
-  .finite()
-  .nonnegative()
-  .optional();
+export const decimalNumberSchema = z.number().finite().nonnegative().optional();
 
 export const upsertProfileInputSchema = z.object({
   birthDate: z.coerce.date().optional(),
@@ -56,6 +52,23 @@ export const createAvailableLoadInputSchema = z.object({
   quantity: z.number().int().positive().default(1)
 });
 
+export const createMeasurementInputSchema = z.object({
+  armCm: decimalNumberSchema,
+  bodyFatPercent: decimalNumberSchema,
+  chestCm: decimalNumberSchema,
+  hipsCm: decimalNumberSchema,
+  measuredAt: z.coerce.date().default(() => new Date()),
+  neckCm: decimalNumberSchema,
+  notes: z.string().trim().optional(),
+  pantlineCm: decimalNumberSchema,
+  restingHeartRateBpm: z.number().int().positive().optional(),
+  source: z.string().trim().default("manual"),
+  stomachCm: decimalNumberSchema,
+  thighCm: decimalNumberSchema,
+  waistCm: decimalNumberSchema,
+  weightKg: decimalNumberSchema
+});
+
 export const createExerciseInputSchema = z.object({
   contraindicationTags: z.array(z.string()).default([]),
   equipmentTypes: z.array(z.string()).default([]),
@@ -67,6 +80,12 @@ export const createExerciseInputSchema = z.object({
   secondaryMuscles: z.array(z.string()).default([]),
   status: z.nativeEnum(ExerciseStatus).default(ExerciseStatus.PENDING_REVIEW),
   substitutionTags: z.array(z.string()).default([])
+});
+
+export const setExercisePreferenceInputSchema = z.object({
+  exerciseId: z.string().min(1),
+  preference: z.nativeEnum(ExercisePreferenceValue),
+  reason: z.string().trim().optional()
 });
 
 export const filterExercisesInputSchema = z.object({
@@ -98,6 +117,12 @@ export type CreateEquipmentInput = z.infer<typeof createEquipmentInputSchema>;
 export type CreateAvailableLoadInput = z.infer<
   typeof createAvailableLoadInputSchema
 >;
+export type CreateMeasurementInput = z.infer<
+  typeof createMeasurementInputSchema
+>;
 export type CreateExerciseInput = z.infer<typeof createExerciseInputSchema>;
+export type SetExercisePreferenceInput = z.infer<
+  typeof setExercisePreferenceInputSchema
+>;
 export type FilterExercisesInput = z.infer<typeof filterExercisesInputSchema>;
-export type EnqueueJobInput = z.infer<typeof enqueueJobInputSchema>;
+export type EnqueueJobInput = z.input<typeof enqueueJobInputSchema>;

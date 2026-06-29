@@ -1,4 +1,4 @@
-import type { Exercise, PrismaClient } from "@prisma/client";
+import type { Exercise, ExercisePreference, PrismaClient } from "@prisma/client";
 
 import { filterExercises } from "@/lib/exercise-filtering";
 import { getSingleUser } from "@/server/auth/single-user";
@@ -12,8 +12,10 @@ import {
 import {
   createExerciseInputSchema,
   filterExercisesInputSchema,
+  setExercisePreferenceInputSchema,
   type CreateExerciseInput,
-  type FilterExercisesInput
+  type FilterExercisesInput,
+  type SetExercisePreferenceInput
 } from "@/server/services/schemas";
 
 function normalizeExerciseName(name: string) {
@@ -84,5 +86,60 @@ export const exerciseService = {
     }));
 
     return success(filterExercises(filterableExercises, parsed.data));
+  },
+
+  async listExercisePreferences(
+    db: PrismaClient = prisma
+  ): Promise<ServiceResult<ExercisePreference[]>> {
+    const userResult = await getSingleUser(db);
+
+    if (!userResult.ok) {
+      return userResult;
+    }
+
+    const preferences = await db.exercisePreference.findMany({
+      where: { userId: userResult.data.id },
+      orderBy: { updatedAt: "desc" }
+    });
+
+    return success(preferences);
+  },
+
+  async setExercisePreference(
+    input: SetExercisePreferenceInput,
+    db: PrismaClient = prisma
+  ): Promise<ServiceResult<ExercisePreference>> {
+    const parsed = setExercisePreferenceInputSchema.safeParse(input);
+
+    if (!parsed.success) {
+      return validationFailure(parsed.error.flatten());
+    }
+
+    const userResult = await getSingleUser(db);
+
+    if (!userResult.ok) {
+      return failure(userResult.error.code, userResult.error.message);
+    }
+
+    const preference = await db.exercisePreference.upsert({
+      where: {
+        userId_exerciseId: {
+          exerciseId: parsed.data.exerciseId,
+          userId: userResult.data.id
+        }
+      },
+      update: {
+        preference: parsed.data.preference,
+        reason: parsed.data.reason
+      },
+      create: {
+        exerciseId: parsed.data.exerciseId,
+        preference: parsed.data.preference,
+        reason: parsed.data.reason,
+        userId: userResult.data.id
+      }
+    });
+
+    return success(preference);
   }
 };
