@@ -1,6 +1,7 @@
 import {
   ExerciseModality,
   ExerciseStatus,
+  JobType,
   MovementPattern,
   SetStatus,
   WorkoutStatus,
@@ -169,6 +170,12 @@ export const workoutService = {
 
     const workout = await db.plannedWorkout.findFirst({
       include: {
+        completedWorkouts: {
+          include: {
+            coachFeedback: true
+          },
+          orderBy: { createdAt: "desc" }
+        },
         exercises: {
           include: {
             exercise: true,
@@ -439,6 +446,24 @@ export const workoutService = {
       await tx.plannedWorkout.update({
         data: { status: finalStatus },
         where: { id: plannedWorkout.id }
+      });
+
+      const jobSnapshot = {
+        completedWorkoutId: completedWorkout.id,
+        plannedWorkoutId: plannedWorkout.id,
+        status: finalStatus
+      };
+
+      await tx.job.createMany({
+        data: [
+          JobType.POST_WORKOUT_FEEDBACK,
+          JobType.NEXT_WORKOUT_GENERATION,
+          JobType.COACH_NOTE_REFRESH
+        ].map((type) => ({
+          inputSnapshot: jobSnapshot,
+          type,
+          userId: userResult.data.id
+        }))
       });
 
       return {

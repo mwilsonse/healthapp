@@ -1,9 +1,12 @@
-import { WorkoutStatus } from "@prisma/client";
+import { JobStatus, JobType, WorkoutStatus, type Job } from "@prisma/client";
 import {
+  AlertCircle,
   CalendarPlus,
   Check,
+  CheckCircle2,
   Clock3,
   Dumbbell,
+  LoaderCircle,
   Minus,
   Play,
   Sparkles
@@ -17,7 +20,7 @@ import {
   startWorkoutAction
 } from "@/features/workouts/actions";
 import { formatPoundsFromKilograms } from "@/lib/units";
-import { workoutService } from "@/server/services";
+import { jobService, workoutService } from "@/server/services";
 
 interface TodayPageProps {
   searchParams?: Promise<{ error?: string }>;
@@ -125,6 +128,61 @@ function statusLabel(status: WorkoutStatus) {
   }
 }
 
+function jobStatusLabel(status?: JobStatus) {
+  switch (status) {
+    case JobStatus.PENDING:
+      return "Pending";
+    case JobStatus.RUNNING:
+      return "Running";
+    case JobStatus.SUCCEEDED:
+      return "Complete";
+    case JobStatus.FAILED:
+      return "Failed";
+    case JobStatus.CANCELLED:
+      return "Cancelled";
+    default:
+      return "Not started";
+  }
+}
+
+function jobStatusTone(status?: JobStatus) {
+  if (status === JobStatus.SUCCEEDED) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === JobStatus.FAILED || status === JobStatus.CANCELLED) {
+    return "border-destructive/40 bg-destructive/10 text-destructive";
+  }
+
+  return "border-border bg-muted text-muted-foreground";
+}
+
+function JobStatusIcon({ status }: { status?: JobStatus }) {
+  if (status === JobStatus.SUCCEEDED) {
+    return <CheckCircle2 aria-hidden="true" className="h-4 w-4" />;
+  }
+
+  if (status === JobStatus.FAILED || status === JobStatus.CANCELLED) {
+    return <AlertCircle aria-hidden="true" className="h-4 w-4" />;
+  }
+
+  return <LoaderCircle aria-hidden="true" className="h-4 w-4" />;
+}
+
+function jobInput(job: Job) {
+  return job.inputSnapshot && typeof job.inputSnapshot === "object"
+    ? (job.inputSnapshot as Record<string, unknown>)
+    : {};
+}
+
+function latestRelatedJob(jobs: Job[], type: JobType, plannedWorkoutId: string) {
+  return jobs.find((job) => {
+    const input = jobInput(job);
+
+    return job.type === type && input.plannedWorkoutId === plannedWorkoutId;
+  });
+}
+
 export default async function TodayPage({ searchParams }: TodayPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const workoutResult = await workoutService.getTodayWorkoutWithDetails();
@@ -178,6 +236,32 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
     WorkoutStatus.IN_PROGRESS
   ];
   const isFinished = finishedStatuses.includes(workout.status);
+  const jobsResult = isFinished ? await jobService.listRecentJobs() : null;
+  const relatedJobs = jobsResult?.ok ? jobsResult.data : [];
+  const feedbackJob = latestRelatedJob(
+    relatedJobs,
+    JobType.POST_WORKOUT_FEEDBACK,
+    workout.id
+  );
+  const nextWorkoutJob = latestRelatedJob(
+    relatedJobs,
+    JobType.NEXT_WORKOUT_GENERATION,
+    workout.id
+  );
+  const coachNoteJob = latestRelatedJob(
+    relatedJobs,
+    JobType.COACH_NOTE_REFRESH,
+    workout.id
+  );
+  const completedLog = workout.completedWorkouts.find((log) =>
+    finishedStatuses.includes(log.status)
+  );
+  const coachFeedback = completedLog?.coachFeedback;
+  const followUpStatusItems = [
+    { job: feedbackJob, label: "Feedback" },
+    { job: nextWorkoutJob, label: "Next workout" },
+    { job: coachNoteJob, label: "Coach notes" }
+  ];
 
   return (
     <section className="flex flex-1 flex-col gap-6">
@@ -545,13 +629,34 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
       ) : null}
 
       {isFinished ? (
-        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-          <h2 className="text-base font-semibold">Workout logged</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            This session is stored as {statusLabel(workout.status).toLowerCase()}
-            . Planned targets remain linked to the actual log for review.
-          </p>
-        </section>
+        <>
+          <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <h2 className="text-base font-semibold">Workout logged</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              This session is stored as{" "}
+              {statusLabel(workout.status).toLowerCase()}. Planned targets
+              remain linked to the actual log for review.
+            </p>
+          </section>
+
+          <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <h2 className="text-base font-semibold">Adaptation status</h2>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {followUpStatusItems.map(({ job, label }) => (
+                <div
+                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${jobStatusTone(
+                    job?.status
+                  )}`}
+                  key={label}
+                >
+                  <JobStatusIcon status={job?.status} />
+                  <span className="font-medium">{label}</span>
+                  <span className="ml-auto">{jobStatusLabel(job?.status)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
       ) : null}
 
       <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
@@ -562,12 +667,29 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
         </p>
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-        <h2 className="text-base font-semibold">Coach notes</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Coach notes will refresh after completed workouts and plan updates.
-        </p>
-      </section>
+      {isFinished ? (
+        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-base font-semibold">Coach feedback</h2>
+          {coachFeedback ? (
+            <div className="mt-2 space-y-3 text-sm leading-6 text-muted-foreground">
+              {coachFeedback.body.split("\n\n").map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Feedback will appear here after the worker finishes.
+            </p>
+          )}
+        </section>
+      ) : (
+        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-base font-semibold">Coach notes</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Coach notes refresh after completed workouts and plan updates.
+          </p>
+        </section>
+      )}
     </section>
   );
 }

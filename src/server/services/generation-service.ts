@@ -8,6 +8,8 @@ import {
   WorkoutStatus,
   type AiInteraction,
   type AvailableLoad,
+  type CoachNote,
+  type CompletedWorkout,
   type Equipment,
   type Exercise,
   type PlannedWorkout,
@@ -38,10 +40,19 @@ import {
   success,
   type ServiceResult
 } from "@/server/services/service-result";
+import {
+  assessWorkoutAdaptation,
+  type WorkoutAdaptationAssessment
+} from "@/server/services/workout-adaptation";
 
 type EquipmentWithLoads = Equipment & { availableLoads: AvailableLoad[] };
 
 export type PlannedWorkoutWithDetails = PlannedWorkout & {
+  completedWorkouts: Array<
+    CompletedWorkout & {
+      coachFeedback: CoachNote | null;
+    }
+  >;
   exercises: Array<
     PlannedWorkoutExercise & {
       exercise: Exercise;
@@ -62,6 +73,14 @@ interface GenerateOptions {
   now?: Date;
   provider?: AiProvider;
   sourceJobId?: string;
+  workoutContext?: {
+    adaptationAssessment?: WorkoutAdaptationAssessment;
+    recentCompletedWorkout?: Prisma.InputJsonObject;
+  };
+}
+
+interface GenerateNextWorkoutOptions extends GenerateOptions {
+  completedWorkoutId?: string;
 }
 
 function normalizeExerciseName(name: string) {
@@ -175,6 +194,67 @@ function constrainSetLoad(
         : `${plannedSet.notes} Rounded from ${plannedSet.targetWeightKg} kg to an available load.`,
     targetWeightKg: rounded.roundedKg
   };
+}
+
+function noteWithAdaptation(note: string | undefined, assessmentNote: string) {
+  return [note, assessmentNote].filter(Boolean).join(" ");
+}
+
+function applyConservativeAdaptation(
+  output: PlannedWorkoutOutputV1,
+  assessment: WorkoutAdaptationAssessment
+): PlannedWorkoutOutputV1 {
+  if (
+    assessment.intensityMultiplier === 1 &&
+    assessment.volumeMultiplier === 1
+  ) {
+    return output;
+  }
+
+  const assessmentNote = `Conservative adaptation: ${assessment.rationale.join(" ")}`;
+
+  return {
+    ...output,
+    exercises: output.exercises.map((exercise) => ({
+      ...exercise,
+      notes: noteWithAdaptation(exercise.notes, assessmentNote),
+      sets: exercise.sets.map((set) => ({
+        ...set,
+        notes: noteWithAdaptation(set.notes, assessmentNote),
+        targetDurationSeconds: set.targetDurationSeconds
+          ? Math.max(
+              1,
+              Math.round(set.targetDurationSeconds * assessment.volumeMultiplier)
+            )
+          : set.targetDurationSeconds,
+        targetReps: set.targetReps
+          ? Math.max(1, Math.floor(set.targetReps * assessment.volumeMultiplier))
+          : set.targetReps,
+        targetWeightKg: set.targetWeightKg
+          ? Number(
+              (set.targetWeightKg * assessment.intensityMultiplier).toFixed(3)
+            )
+          : set.targetWeightKg
+      }))
+    })),
+    rationale: `${output.rationale} ${assessmentNote}`,
+    summary: `${output.summary} Adapted conservatively after the previous workout.`
+  };
+}
+
+function nextWorkoutDate(
+  completedAt: Date | null,
+  startedAt: Date,
+  now: Date,
+  assessment: WorkoutAdaptationAssessment
+) {
+  const basis = completedAt ?? startedAt;
+  const next = new Date(basis);
+  const daysToAdd = assessment.completionQuality === "high" ? 1 : 2;
+
+  next.setDate(next.getDate() + daysToAdd);
+
+  return next.getTime() > now.getTime() ? next : now;
 }
 
 async function buildPlanningInput(db: PrismaClient) {
@@ -398,6 +478,7 @@ export const generationService = {
             title: activePlan.title,
             weeklyStructure: activePlan.weeklyStructure
           },
+          workoutContext: options.workoutContext,
           requestedFor: now.toISOString()
         },
         schema: plannedWorkoutOutputV1Schema,
@@ -405,7 +486,7 @@ export const generationService = {
         schemaVersion: "1",
         type: AiInteractionType.WORKOUT_GENERATION,
         userPrompt:
-          "Create today's planned workout using only available equipment and conservative loads."
+          "Create the requested planned workout using only available equipment and conservative loads. Respect any workout context adaptation constraints."
       },
       {
         db,
@@ -421,7 +502,12 @@ export const generationService = {
       );
     }
 
-    const output = aiResult.data.output;
+    const output = options.workoutContext?.adaptationAssessment
+      ? applyConservativeAdaptation(
+          aiResult.data.output,
+          options.workoutContext.adaptationAssessment
+        )
+      : aiResult.data.output;
     const { end, start } = dayBounds(now);
     const equipment = await db.equipment.findMany({
       include: { availableLoads: true },
@@ -518,6 +604,12 @@ export const generationService = {
 
         return tx.plannedWorkout.findUniqueOrThrow({
           include: {
+            completedWorkouts: {
+              include: {
+                coachFeedback: true
+              },
+              orderBy: { createdAt: "desc" }
+            },
             exercises: {
               include: {
                 exercise: true,
@@ -576,5 +668,71 @@ export const generationService = {
     }
 
     return this.generateTodayWorkout({ ...options, now });
+  },
+
+  async generateNextWorkoutAfterCompleted(
+    options: GenerateNextWorkoutOptions = {}
+  ): Promise<ServiceResult<PlannedWorkoutWithDetails>> {
+    const db = options.db ?? prisma;
+    const now = options.now ?? new Date();
+    const userResult = await getSingleUser(db);
+
+    if (!userResult.ok) {
+      return userResult;
+    }
+
+    const completedWorkout = await db.completedWorkout.findFirst({
+      include: {
+        exercises: {
+          include: {
+            sets: {
+              include: {
+                plannedWorkoutSet: true
+              },
+              orderBy: { orderIndex: "asc" }
+            }
+          },
+          orderBy: { orderIndex: "asc" }
+        },
+        plannedWorkout: true
+      },
+      orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+      where: {
+        id: options.completedWorkoutId,
+        status: {
+          in: [
+            WorkoutStatus.COMPLETED,
+            WorkoutStatus.PARTIAL,
+            WorkoutStatus.SKIPPED
+          ]
+        },
+        userId: userResult.data.id
+      }
+    });
+
+    if (!completedWorkout) {
+      return failure("NOT_FOUND", "Completed workout was not found.");
+    }
+
+    const assessment = assessWorkoutAdaptation(completedWorkout);
+    const scheduledFor = nextWorkoutDate(
+      completedWorkout.completedAt,
+      completedWorkout.startedAt,
+      now,
+      assessment
+    );
+
+    return this.generateTodayWorkout({
+      ...options,
+      now: scheduledFor,
+      workoutContext: {
+        adaptationAssessment: assessment,
+        recentCompletedWorkout: {
+          completedAt: completedWorkout.completedAt?.toISOString() ?? null,
+          plannedWorkoutTitle: completedWorkout.plannedWorkout?.title ?? null,
+          status: completedWorkout.status
+        }
+      }
+    });
   }
 };

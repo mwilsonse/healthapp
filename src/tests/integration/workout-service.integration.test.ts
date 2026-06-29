@@ -1,6 +1,7 @@
 import {
   ExerciseModality,
   ExerciseStatus,
+  JobType,
   MovementPattern,
   PlanStatus,
   SetStatus,
@@ -10,7 +11,8 @@ import {
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db";
-import { workoutService } from "@/server/services";
+import { jobHandlers } from "@/server/jobs";
+import { jobService, workoutService } from "@/server/services";
 
 const TEST_USER_ID = "default-user";
 
@@ -28,9 +30,15 @@ async function ensureUser() {
 }
 
 async function clearWorkoutData() {
+  await prisma.job.deleteMany({ where: { userId: TEST_USER_ID } });
   await prisma.completedWorkout.deleteMany({ where: { userId: TEST_USER_ID } });
   await prisma.plannedWorkout.deleteMany({ where: { userId: TEST_USER_ID } });
   await prisma.trainingPlan.deleteMany({ where: { userId: TEST_USER_ID } });
+  await prisma.coachNote.deleteMany({ where: { userId: TEST_USER_ID } });
+  await prisma.recommendationRationale.deleteMany({
+    where: { userId: TEST_USER_ID }
+  });
+  await prisma.aiInteraction.deleteMany({ where: { userId: TEST_USER_ID } });
   await prisma.exercise.deleteMany({ where: { normalizedName: "test-squat" } });
 }
 
@@ -164,5 +172,119 @@ describe("workoutService integration", () => {
     expect(savedCompletedSet.painFlag).toBe(true);
     expect(savedCompletedSet.plannedWorkoutSet?.id).toBe(plannedSet.id);
     expect(savedWorkout.status).toBe(WorkoutStatus.COMPLETED);
+
+    const jobs = await prisma.job.findMany({
+      where: { userId: TEST_USER_ID }
+    });
+    const relatedJobs = jobs.filter((job) => {
+      const snapshot = job.inputSnapshot as {
+        plannedWorkoutId?: string;
+      };
+
+      return snapshot.plannedWorkoutId === workout.id;
+    });
+
+    expect(relatedJobs.map((job) => job.type).sort()).toEqual(
+      [
+        JobType.COACH_NOTE_REFRESH,
+        JobType.NEXT_WORKOUT_GENERATION,
+        JobType.POST_WORKOUT_FEEDBACK
+      ].sort()
+    );
+    expect(
+      relatedJobs.every((job) => {
+        const snapshot = job.inputSnapshot as {
+          completedWorkoutId?: string;
+          plannedWorkoutId?: string;
+        };
+
+        return (
+          snapshot.completedWorkoutId === (completed.ok && completed.data.id) &&
+          snapshot.plannedWorkoutId === workout.id
+        );
+      })
+    ).toBe(true);
+  });
+
+  it("worker creates feedback and a conservatively adapted next workout", async () => {
+    const { plannedExercise, plannedSet, workout } = await createPlannedWorkout();
+
+    const completed = await workoutService.completeWorkout(
+      {
+        exercises: [
+          {
+            plannedWorkoutExerciseId: plannedExercise.id,
+            sets: [
+              {
+                actualReps: 6,
+                actualRpe: 9,
+                actualWeightKg: 12.5,
+                painFlag: true,
+                plannedWorkoutSetId: plannedSet.id,
+                status: SetStatus.COMPLETED
+              }
+            ]
+          }
+        ],
+        intensityAdjustment: "REDUCED",
+        overallRpe: 9,
+        painNotes: "Left knee discomfort.",
+        plannedWorkoutId: workout.id,
+        status: WorkoutStatus.COMPLETED
+      },
+      new Date("2026-06-29T15:45:00.000Z")
+    );
+
+    expect(completed.ok).toBe(true);
+    if (!completed.ok) {
+      return;
+    }
+
+    const jobs = await prisma.job.findMany({
+      where: {
+        type: {
+          in: [JobType.POST_WORKOUT_FEEDBACK, JobType.NEXT_WORKOUT_GENERATION]
+        },
+        userId: TEST_USER_ID
+      }
+    });
+
+    for (const job of jobs) {
+      const result = await jobService.runJob(job, jobHandlers, {
+        workerId: "phase-11-test-worker"
+      });
+
+      expect(result.ok).toBe(true);
+    }
+
+    const savedCompleted = await prisma.completedWorkout.findUniqueOrThrow({
+      include: { coachFeedback: true },
+      where: { id: completed.data.id }
+    });
+    const plannedWorkouts = await prisma.plannedWorkout.findMany({
+      include: {
+        exercises: {
+          include: { sets: true }
+        }
+      },
+      orderBy: { scheduledFor: "asc" },
+      where: { userId: TEST_USER_ID }
+    });
+    const nextWorkout = plannedWorkouts.find((item) => item.id !== workout.id);
+
+    expect(savedCompleted.coachFeedback).not.toBeNull();
+    expect(savedCompleted.coachFeedback?.body).toContain("Next workout focus");
+    expect(nextWorkout).toBeDefined();
+    expect(nextWorkout?.scheduledFor.getTime()).toBeGreaterThan(
+      workout.scheduledFor.getTime()
+    );
+    expect(nextWorkout?.summary).toContain("Adapted conservatively");
+    expect(
+      nextWorkout?.exercises.some((exercise) =>
+        exercise.sets.some((set) =>
+          set.notes?.includes("Conservative adaptation")
+        )
+      )
+    ).toBe(true);
   });
 });
