@@ -17,6 +17,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration": "RUN_INTEGRATION_TESTS=1 vitest run src/tests/integration",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "worker": "tsx src/worker/index.ts",
