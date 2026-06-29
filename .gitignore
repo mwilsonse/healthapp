@@ -1,12 +1,12 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 .pnp/
 .pnp.js
 
 # Next.js
 .next/
 out/
-next-env.d.ts
 
 # Production builds
 dist/
