@@ -4,9 +4,17 @@ export { equipmentService } from "@/server/services/equipment-service";
 export { exerciseService } from "@/server/services/exercise-service";
 export { exportService } from "@/server/services/export-service";
 export { goalService } from "@/server/services/goal-service";
+export { generationService } from "@/server/services/generation-service";
 export { jobService } from "@/server/services/job-service";
 export { planningService } from "@/server/services/planning-service";
 export { profileService } from "@/server/services/profile-service";
 export { workoutService } from "@/server/services/workout-service";
-export type { ServiceError, ServiceResult } from "@/server/services/service-result";
-export { failure, success, validationFailure } from "@/server/services/service-result";
+export type {
+  ServiceError,
+  ServiceResult
+} from "@/server/services/service-result";
+export {
+  failure,
+  success,
+  validationFailure
+} from "@/server/services/service-result";

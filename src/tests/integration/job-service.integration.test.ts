@@ -35,7 +35,7 @@ describe("jobService integration", () => {
 
   it("enqueues, claims, runs, and records a successful job", async () => {
     const enqueued = await jobService.enqueueJob({
-      type: JobType.NEXT_WORKOUT_GENERATION
+      type: JobType.COACH_NOTE_REFRESH
     });
 
     expect(enqueued.ok).toBe(true);
