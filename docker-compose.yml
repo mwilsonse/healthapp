@@ -30,6 +30,7 @@ services:
       APP_ACCESS_PASSCODE: ${APP_ACCESS_PASSCODE:-replace-with-local-passcode}
       DATABASE_URL: ${DATABASE_URL:-postgresql://phip:phip-dev-password@postgres:5432/phip?schema=public}
       AI_PROVIDER: ${AI_PROVIDER:-fake}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
       AI_API_KEY: ${AI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: production
@@ -52,6 +53,7 @@ services:
       APP_ACCESS_PASSCODE: ${APP_ACCESS_PASSCODE:-replace-with-local-passcode}
       DATABASE_URL: ${DATABASE_URL:-postgresql://phip:phip-dev-password@postgres:5432/phip?schema=public}
       AI_PROVIDER: ${AI_PROVIDER:-fake}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
       AI_API_KEY: ${AI_API_KEY:-}
       JOB_WORKER_CONCURRENCY: ${JOB_WORKER_CONCURRENCY:-1}
       JOB_MAX_RETRIES: ${JOB_MAX_RETRIES:-3}

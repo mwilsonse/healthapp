@@ -5,6 +5,7 @@ const envSchema = z.object({
   APP_SECRET: z.string().min(1, "APP_SECRET is required"),
   APP_ACCESS_PASSCODE: z.string().min(1).optional(),
   AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().min(1).default("gpt-4.1-mini"),
   AI_PROVIDER: z.string().default("fake"),
   BACKUP_DIR: z.string().default("./backups/postgres"),
   BACKUP_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
@@ -14,9 +15,7 @@ const envSchema = z.object({
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
   JOB_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development")
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development")
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
