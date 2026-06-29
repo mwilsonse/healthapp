@@ -11,9 +11,10 @@ The preferred build style is thin vertical slices. Build enough foundation to su
 These items require human action, account access, or machine-level setup outside normal Codex implementation.
 
 - Install and run Docker Desktop or equivalent Docker support on the development machine.
-- Decide where local Postgres data and backups should live on the Synology/Linux host.
+- Run Postgres in Docker for both local testing and the eventual Synology/Linux deployment.
+- Decide the final Synology/Linux host paths for Postgres data and backups before NAS deployment.
 - Provide an AI API key when AI-backed generation begins.
-- Decide the initial local app access secret or passcode, if the app will be opened beyond a trusted localhost session.
+- Manage the local app access secret or passcode directly through environment configuration.
 - Confirm whether the default single user display name and timezone should be seeded as real personal values or placeholders.
 - Review any generated exercise seed data before relying on it for actual training.
 - Review destructive delete/reset behavior before using it on real data.
