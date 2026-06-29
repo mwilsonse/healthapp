@@ -5,6 +5,10 @@ import {
   goalService,
   profileService
 } from "@/server/services";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { resetHealthDataAction } from "@/features/profile/actions";
+import { RESET_USER_DATA_CONFIRMATION } from "@/server/services/export-service";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +46,7 @@ export default async function ProfilePage() {
     <div className="space-y-6">
       <section className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground">Profile</p>
-        <h1 className="text-3xl font-semibold tracking-normal">
-          Health setup
-        </h1>
+        <h1 className="text-3xl font-semibold tracking-normal">Health setup</h1>
         <p className="text-sm leading-6 text-muted-foreground">
           Review the data currently available for planning.
         </p>
@@ -59,7 +61,9 @@ export default async function ProfilePage() {
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Current weight</dt>
-              <dd>{profile.data.currentWeightKg?.toString() ?? "Not set"} kg</dd>
+              <dd>
+                {profile.data.currentWeightKg?.toString() ?? "Not set"} kg
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Resting HR</dt>
@@ -126,11 +130,50 @@ export default async function ProfilePage() {
         </div>
       </Section>
 
-      <Section title="Data summary">
+      <Section title="Data management">
         {summary.ok ? (
-          <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-            {JSON.stringify(summary.data.counts, null, 2)}
-          </pre>
+          <div className="space-y-4">
+            <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+              {JSON.stringify(summary.data.counts, null, 2)}
+            </pre>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild>
+                <a href="/api/export">Download JSON export</a>
+              </Button>
+            </div>
+            <form
+              action={resetHealthDataAction}
+              className="space-y-3 rounded-md border border-destructive/30 bg-destructive/5 p-3"
+            >
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-destructive">
+                  Reset health data
+                </h3>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  This removes profile details, measurements, goals, equipment,
+                  plans, workouts, coach notes, jobs, and AI history. Export
+                  first if you need a copy.
+                </p>
+              </div>
+              <label className="grid gap-2 text-sm">
+                <span className="font-medium">
+                  Type {RESET_USER_DATA_CONFIRMATION}
+                </span>
+                <input
+                  className="h-10 rounded-md border border-input bg-background px-3"
+                  name="confirmation"
+                  placeholder={RESET_USER_DATA_CONFIRMATION}
+                />
+              </label>
+              <SubmitButton
+                className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                pendingLabel="Resetting"
+                variant="outline"
+              >
+                Reset health data
+              </SubmitButton>
+            </form>
+          </div>
         ) : (
           <Empty>Summary unavailable.</Empty>
         )}

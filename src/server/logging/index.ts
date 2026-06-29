@@ -11,9 +11,35 @@ const levelRank: Record<LogLevel, number> = {
 
 type LogContext = Record<string, unknown>;
 
+const sensitiveKeyPattern =
+  /(api.?key|birth|body|calorie|constraint|description|detail|distance|duration|error|feedback|heart|height|input|measurement|metric|note|nutrition|output|pain|passcode|password|prompt|rationale|secret|sleep|snapshot|token|weight)/i;
+
 function shouldLog(level: LogLevel) {
   const configuredLevel = getEnv().LOG_LEVEL;
   return levelRank[level] >= levelRank[configuredLevel];
+}
+
+function sanitizeForLog(value: unknown, depth = 0): unknown {
+  if (depth > 4) {
+    return "[redacted-depth]";
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLog(item, depth + 1));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      sensitiveKeyPattern.test(key)
+        ? "[redacted]"
+        : sanitizeForLog(entry, depth + 1)
+    ])
+  );
 }
 
 function writeLog(level: LogLevel, message: string, context?: LogContext) {
@@ -22,9 +48,9 @@ function writeLog(level: LogLevel, message: string, context?: LogContext) {
   }
 
   const entry = {
+    context: context ? sanitizeForLog(context) : undefined,
     level,
     message,
-    context,
     timestamp: new Date().toISOString()
   };
 

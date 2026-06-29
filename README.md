@@ -6,13 +6,16 @@ The broader product direction is a Personal Health Intelligence Platform that ca
 
 ## Current Milestone
 
-The project is currently in Phase 0: repo and planning hygiene.
+The project is currently implementing the late V1 hardening phases: personal
+data export/reset, backups, self-hosting readiness, and reliability polish.
 
 Primary planning documents:
 
 - `docs/product-architecture-plan.md`: product direction and long-term roadmap.
 - `docs/implementation-architecture-spec.md`: implementation architecture contract.
 - `docs/phased-implementation-plan.md`: Codex-executable phased build plan.
+- `docs/self-hosting/synology-nas.md`: Synology/Linux deployment, backup,
+  restore, and laptop-to-NAS migration notes.
 
 ## Planned Stack
 
@@ -69,6 +72,9 @@ Expected persistent host paths on Synology:
 ```
 
 Postgres should run inside a Docker container. Its data should persist through a host bind mount or Docker volume, and backups should be written outside the live database data directory.
+
+See `docs/self-hosting/synology-nas.md` before moving data from the laptop to
+the NAS. Test restore before relying on NAS backups.
 
 ## Repository Rules
 
