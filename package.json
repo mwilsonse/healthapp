@@ -9,6 +9,10 @@
     "docker:dev": "docker compose up --build",
     "build": "next build",
     "start": "next start",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:validate": "prisma validate",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -18,6 +22,7 @@
     "backup:postgres": "bash docker/backup.sh"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.0",
     "@radix-ui/react-slot": "^1.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -44,6 +49,7 @@
     "jsdom": "^25.0.1",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
+    "prisma": "^6.19.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

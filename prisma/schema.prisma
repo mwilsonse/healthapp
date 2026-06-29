@@ -1,0 +1,700 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UnitPreference {
+  US
+  METRIC
+}
+
+enum GoalStatus {
+  ACTIVE    @map("active")
+  PAUSED    @map("paused")
+  COMPLETED @map("completed")
+  ABANDONED @map("abandoned")
+}
+
+enum GoalPriority {
+  LOW     @map("low")
+  MEDIUM  @map("medium")
+  HIGH    @map("high")
+  PRIMARY @map("primary")
+}
+
+enum EquipmentType {
+  BARBELL        @map("barbell")
+  DUMBBELL       @map("dumbbell")
+  KETTLEBELL     @map("kettlebell")
+  MACHINE        @map("machine")
+  CABLE          @map("cable")
+  BAND           @map("band")
+  BODYWEIGHT     @map("bodyweight")
+  CARDIO_MACHINE @map("cardio_machine")
+  OTHER          @map("other")
+}
+
+enum ExerciseStatus {
+  ACTIVE         @map("active")
+  PENDING_REVIEW @map("pending_review")
+  ARCHIVED       @map("archived")
+}
+
+enum ExerciseModality {
+  STRENGTH @map("strength")
+  CARDIO   @map("cardio")
+  MOBILITY @map("mobility")
+  WARMUP   @map("warmup")
+  RECOVERY @map("recovery")
+}
+
+enum MovementPattern {
+  SQUAT     @map("squat")
+  HINGE     @map("hinge")
+  PUSH      @map("push")
+  PULL      @map("pull")
+  LUNGE     @map("lunge")
+  CARRY     @map("carry")
+  ROTATION  @map("rotation")
+  GAIT      @map("gait")
+  ISOLATION @map("isolation")
+  CARDIO    @map("cardio")
+  MOBILITY  @map("mobility")
+  OTHER     @map("other")
+}
+
+enum ExercisePreferenceValue {
+  ENJOY   @map("enjoy")
+  NEUTRAL @map("neutral")
+  AVOID   @map("avoid")
+}
+
+enum PlanStatus {
+  DRAFT      @map("draft")
+  ACTIVE     @map("active")
+  COMPLETED  @map("completed")
+  SUPERSEDED @map("superseded")
+  FAILED     @map("failed")
+}
+
+enum WorkoutStatus {
+  PLANNED     @map("planned")
+  IN_PROGRESS @map("in_progress")
+  COMPLETED   @map("completed")
+  SKIPPED     @map("skipped")
+  PARTIAL     @map("partial")
+  SUPERSEDED  @map("superseded")
+}
+
+enum SetStatus {
+  PLANNED   @map("planned")
+  COMPLETED @map("completed")
+  SKIPPED   @map("skipped")
+  MODIFIED  @map("modified")
+}
+
+enum JobType {
+  BIWEEKLY_PLAN_REVIEW    @map("biweekly_plan_review")
+  NEXT_WORKOUT_GENERATION @map("next_workout_generation")
+  POST_WORKOUT_FEEDBACK   @map("post_workout_feedback")
+  COACH_NOTE_REFRESH      @map("coach_note_refresh")
+}
+
+enum JobStatus {
+  PENDING   @map("pending")
+  RUNNING   @map("running")
+  SUCCEEDED @map("succeeded")
+  FAILED    @map("failed")
+  CANCELLED @map("cancelled")
+}
+
+enum AiInteractionType {
+  PLAN_GENERATION       @map("plan_generation")
+  WORKOUT_GENERATION    @map("workout_generation")
+  POST_WORKOUT_FEEDBACK @map("post_workout_feedback")
+  COACH_NOTE_REFRESH    @map("coach_note_refresh")
+  COACH_CHAT            @map("coach_chat")
+}
+
+enum CoachActionStatus {
+  SUGGESTED @map("suggested")
+  CONFIRMED @map("confirmed")
+  APPLIED   @map("applied")
+  DISMISSED @map("dismissed")
+  FAILED    @map("failed")
+}
+
+enum IntegrationStatus {
+  ACTIVE       @map("active")
+  DISCONNECTED @map("disconnected")
+  ERROR        @map("error")
+  PAUSED       @map("paused")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  displayName    String
+  timezone       String         @default("America/Chicago")
+  unitPreference UnitPreference @default(US)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  aiInteractions      AiInteraction[]
+  availableLoads      AvailableLoad[]
+  cardioActivities    CardioActivity[]
+  coachNotes          CoachNote[]
+  completedWorkouts   CompletedWorkout[]
+  deviceIntegrations  DeviceIntegration[]
+  equipment           Equipment[]
+  exercisePreferences ExercisePreference[]
+  exercisesCreated    Exercise[]                @relation("UserCreatedExercises")
+  goals               Goal[]
+  healthMetrics       HealthMetric[]
+  insightEvents       InsightEvent[]
+  jobs                Job[]
+  measurements        UserMeasurement[]
+  nutritionEntries    NutritionEntry[]
+  plannedWorkouts     PlannedWorkout[]
+  profile             UserProfile?
+  rationales          RecommendationRationale[]
+  trainingPlans       TrainingPlan[]
+  biomarkerResults    BiomarkerResult[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  birthDate              DateTime?
+  sex                    String?
+  heightCm               Decimal?  @db.Decimal(7, 2)
+  currentWeightKg        Decimal?  @db.Decimal(7, 3)
+  restingHeartRateBpm    Int?
+  sleepBaselineNotes     String?
+  nutritionNotes         String?
+  preferredTrainingTimes Json?
+  generalConstraints     String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model UserMeasurement {
+  id                  String   @id @default(cuid())
+  userId              String
+  measuredAt          DateTime
+  weightKg            Decimal? @db.Decimal(7, 3)
+  bodyFatPercent      Decimal? @db.Decimal(5, 2)
+  chestCm             Decimal? @db.Decimal(7, 2)
+  waistCm             Decimal? @db.Decimal(7, 2)
+  stomachCm           Decimal? @db.Decimal(7, 2)
+  hipsCm              Decimal? @db.Decimal(7, 2)
+  pantlineCm          Decimal? @db.Decimal(7, 2)
+  neckCm              Decimal? @db.Decimal(7, 2)
+  armCm               Decimal? @db.Decimal(7, 2)
+  thighCm             Decimal? @db.Decimal(7, 2)
+  restingHeartRateBpm Int?
+  source              String?
+  notes               String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, measuredAt])
+  @@map("user_measurements")
+}
+
+model Goal {
+  id                String       @id @default(cuid())
+  userId            String
+  title             String
+  description       String?
+  priority          GoalPriority @default(MEDIUM)
+  status            GoalStatus   @default(ACTIVE)
+  targetDate        DateTime?
+  supportingMetrics Json?
+  notes             String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  primaryTrainingPlans TrainingPlan[]
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, priority])
+  @@map("goals")
+}
+
+model Equipment {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String
+  type        EquipmentType
+  description String?
+  isAvailable Boolean       @default(true)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  availableLoads AvailableLoad[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("equipment")
+}
+
+model AvailableLoad {
+  id          String  @id @default(cuid())
+  userId      String
+  equipmentId String
+  loadKg      Decimal @db.Decimal(7, 3)
+  label       String?
+  quantity    Int     @default(1)
+  isPair      Boolean @default(false)
+  notes       String?
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, equipmentId, loadKg])
+  @@map("available_loads")
+}
+
+model Exercise {
+  id                       String           @id @default(cuid())
+  name                     String
+  normalizedName           String           @unique
+  status                   ExerciseStatus   @default(ACTIVE)
+  modality                 ExerciseModality
+  movementPattern          MovementPattern
+  primaryMuscles           Json?
+  secondaryMuscles         Json?
+  equipmentTypes           Json?
+  contraindicationTags     Json?
+  substitutionTags         Json?
+  instructions             String?
+  createdByUserId          String?
+  createdByAiInteractionId String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  completedWorkoutExercises CompletedWorkoutExercise[]
+  createdByAiInteraction    AiInteraction?             @relation(fields: [createdByAiInteractionId], references: [id], onDelete: SetNull)
+  createdByUser             User?                      @relation("UserCreatedExercises", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  preferences               ExercisePreference[]
+  plannedWorkoutExercises   PlannedWorkoutExercise[]
+
+  @@map("exercises")
+}
+
+model ExercisePreference {
+  id         String                  @id @default(cuid())
+  userId     String
+  exerciseId String
+  preference ExercisePreferenceValue @default(NEUTRAL)
+  reason     String?
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseId])
+  @@map("exercise_preferences")
+}
+
+model TrainingPlan {
+  id                   String     @id @default(cuid())
+  userId               String
+  status               PlanStatus @default(DRAFT)
+  startDate            DateTime
+  endDate              DateTime
+  title                String
+  primaryGoalId        String?
+  summary              String?
+  weeklyStructure      Json?
+  progressionGuidance  String?
+  recoveryGuidance     String?
+  measurementReminders Json?
+  rationaleId          String?
+  createdByJobId       String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  createdByJob    Job?                     @relation("TrainingPlanCreatedByJob", fields: [createdByJobId], references: [id], onDelete: SetNull)
+  plannedWorkouts PlannedWorkout[]
+  primaryGoal     Goal?                    @relation(fields: [primaryGoalId], references: [id], onDelete: SetNull)
+  rationale       RecommendationRationale? @relation(fields: [rationaleId], references: [id], onDelete: SetNull)
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, startDate])
+  @@map("training_plans")
+}
+
+model PlannedWorkout {
+  id                    String        @id @default(cuid())
+  userId                String
+  trainingPlanId        String
+  status                WorkoutStatus @default(PLANNED)
+  scheduledFor          DateTime
+  workoutType           String
+  title                 String
+  summary               String?
+  warmup                String?
+  targetDurationSeconds Int?
+  rationaleId           String?
+  createdByJobId        String?
+  supersededByWorkoutId String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  cardioActivities    CardioActivity[]
+  completedWorkouts   CompletedWorkout[]
+  createdByJob        Job?                     @relation("PlannedWorkoutCreatedByJob", fields: [createdByJobId], references: [id], onDelete: SetNull)
+  exercises           PlannedWorkoutExercise[]
+  rationale           RecommendationRationale? @relation(fields: [rationaleId], references: [id], onDelete: SetNull)
+  supersededByWorkout PlannedWorkout?          @relation("WorkoutSupersession", fields: [supersededByWorkoutId], references: [id], onDelete: SetNull)
+  supersededWorkouts  PlannedWorkout[]         @relation("WorkoutSupersession")
+  trainingPlan        TrainingPlan             @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, scheduledFor])
+  @@map("planned_workouts")
+}
+
+model PlannedWorkoutExercise {
+  id               String   @id @default(cuid())
+  plannedWorkoutId String
+  exerciseId       String
+  orderIndex       Int
+  nameSnapshot     String
+  notes            String?
+  restSeconds      Int?
+  targetRpe        Decimal? @db.Decimal(4, 1)
+  targetRir        Decimal? @db.Decimal(4, 1)
+
+  completedExercises CompletedWorkoutExercise[]
+  exercise           Exercise                   @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  plannedWorkout     PlannedWorkout             @relation(fields: [plannedWorkoutId], references: [id], onDelete: Cascade)
+  sets               PlannedWorkoutSet[]
+
+  @@index([plannedWorkoutId, orderIndex])
+  @@map("planned_workout_exercises")
+}
+
+model PlannedWorkoutSet {
+  id                       String   @id @default(cuid())
+  plannedWorkoutExerciseId String
+  orderIndex               Int
+  targetReps               Int?
+  targetWeightKg           Decimal? @db.Decimal(7, 3)
+  targetDurationSeconds    Int?
+  targetDistanceMeters     Int?
+  targetRpe                Decimal? @db.Decimal(4, 1)
+  targetRir                Decimal? @db.Decimal(4, 1)
+  notes                    String?
+
+  completedSets          CompletedExerciseSet[]
+  plannedWorkoutExercise PlannedWorkoutExercise @relation(fields: [plannedWorkoutExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([plannedWorkoutExerciseId, orderIndex])
+  @@map("planned_workout_sets")
+}
+
+model CompletedWorkout {
+  id               String        @id @default(cuid())
+  userId           String
+  plannedWorkoutId String?
+  status           WorkoutStatus
+  startedAt        DateTime
+  completedAt      DateTime?
+  skipReason       String?
+  overallRpe       Decimal?      @db.Decimal(4, 1)
+  painNotes        String?
+  userNotes        String?
+  coachFeedbackId  String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  cardioActivities CardioActivity[]
+  coachFeedback    CoachNote?                 @relation(fields: [coachFeedbackId], references: [id], onDelete: SetNull)
+  exercises        CompletedWorkoutExercise[]
+  plannedWorkout   PlannedWorkout?            @relation(fields: [plannedWorkoutId], references: [id], onDelete: SetNull)
+  user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, completedAt, status])
+  @@map("completed_workouts")
+}
+
+model CompletedWorkoutExercise {
+  id                       String  @id @default(cuid())
+  completedWorkoutId       String
+  plannedWorkoutExerciseId String?
+  exerciseId               String
+  orderIndex               Int
+  nameSnapshot             String
+  substitutionReason       String?
+  notes                    String?
+
+  completedWorkout       CompletedWorkout        @relation(fields: [completedWorkoutId], references: [id], onDelete: Cascade)
+  exercise               Exercise                @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  plannedWorkoutExercise PlannedWorkoutExercise? @relation(fields: [plannedWorkoutExerciseId], references: [id], onDelete: SetNull)
+  sets                   CompletedExerciseSet[]
+
+  @@index([completedWorkoutId, orderIndex])
+  @@map("completed_workout_exercises")
+}
+
+model CompletedExerciseSet {
+  id                         String    @id @default(cuid())
+  completedWorkoutExerciseId String
+  plannedWorkoutSetId        String?
+  orderIndex                 Int
+  status                     SetStatus @default(COMPLETED)
+  actualReps                 Int?
+  actualWeightKg             Decimal?  @db.Decimal(7, 3)
+  actualDurationSeconds      Int?
+  actualDistanceMeters       Int?
+  actualRpe                  Decimal?  @db.Decimal(4, 1)
+  actualRir                  Decimal?  @db.Decimal(4, 1)
+  painFlag                   Boolean   @default(false)
+  notes                      String?
+
+  completedWorkoutExercise CompletedWorkoutExercise @relation(fields: [completedWorkoutExerciseId], references: [id], onDelete: Cascade)
+  plannedWorkoutSet        PlannedWorkoutSet?       @relation(fields: [plannedWorkoutSetId], references: [id], onDelete: SetNull)
+
+  @@index([completedWorkoutExerciseId, orderIndex])
+  @@map("completed_exercise_sets")
+}
+
+model CardioActivity {
+  id                      String   @id @default(cuid())
+  userId                  String
+  plannedWorkoutId        String?
+  completedWorkoutId      String?
+  activityType            String
+  startedAt               DateTime
+  durationSeconds         Int?
+  distanceMeters          Int?
+  averagePaceSecondsPerKm Int?
+  averageHeartRateBpm     Int?
+  maxHeartRateBpm         Int?
+  caloriesKcal            Int?
+  source                  String?
+  notes                   String?
+
+  completedWorkout CompletedWorkout? @relation(fields: [completedWorkoutId], references: [id], onDelete: SetNull)
+  plannedWorkout   PlannedWorkout?   @relation(fields: [plannedWorkoutId], references: [id], onDelete: SetNull)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@map("cardio_activities")
+}
+
+model CoachNote {
+  id          String    @id @default(cuid())
+  userId      String
+  scope       String
+  title       String
+  body        String
+  validFrom   DateTime?
+  validUntil  DateTime?
+  sourceJobId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  completedWorkouts CompletedWorkout[]
+  sourceJob         Job?               @relation("CoachNoteSourceJob", fields: [sourceJobId], references: [id], onDelete: SetNull)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope, validFrom])
+  @@map("coach_notes")
+}
+
+model RecommendationRationale {
+  id                       String   @id @default(cuid())
+  userId                   String
+  summary                  String
+  details                  Json?
+  evidenceRefs             Json?
+  createdByAiInteractionId String?
+  createdAt                DateTime @default(now())
+
+  createdByAiInteraction AiInteraction?   @relation(fields: [createdByAiInteractionId], references: [id], onDelete: SetNull)
+  plannedWorkouts        PlannedWorkout[]
+  trainingPlans          TrainingPlan[]
+  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recommendation_rationales")
+}
+
+model AiInteraction {
+  id                  String            @id @default(cuid())
+  userId              String
+  type                AiInteractionType
+  provider            String
+  model               String
+  inputSnapshot       Json?
+  validatedOutput     Json?
+  outputSchemaVersion String
+  tokenUsage          Json?
+  error               String?
+  createdAt           DateTime          @default(now())
+
+  exercisesCreated Exercise[]
+  rationales       RecommendationRationale[]
+  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, createdAt])
+  @@map("ai_interactions")
+}
+
+model Job {
+  id            String    @id @default(cuid())
+  userId        String
+  type          JobType
+  status        JobStatus @default(PENDING)
+  scheduledAt   DateTime?
+  availableAt   DateTime  @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  retryCount    Int       @default(0)
+  maxRetries    Int       @default(3)
+  inputSnapshot Json?
+  outputRef     Json?
+  lastError     String?
+  lockedAt      DateTime?
+  lockedBy      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  coachNotes             CoachNote[]      @relation("CoachNoteSourceJob")
+  plannedWorkoutsCreated PlannedWorkout[] @relation("PlannedWorkoutCreatedByJob")
+  runs                   JobRun[]
+  trainingPlansCreated   TrainingPlan[]   @relation("TrainingPlanCreatedByJob")
+  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([userId, type, createdAt])
+  @@map("jobs")
+}
+
+model JobRun {
+  id         String    @id @default(cuid())
+  jobId      String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     JobStatus
+  workerId   String?
+  error      String?
+  logs       Json?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, startedAt])
+  @@map("job_runs")
+}
+
+model HealthMetric {
+  id         String   @id @default(cuid())
+  userId     String
+  metricType String
+  value      Decimal  @db.Decimal(12, 4)
+  unit       String
+  recordedAt DateTime
+  source     String?
+  metadata   Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, metricType, recordedAt])
+  @@map("health_metrics")
+}
+
+model NutritionEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  occurredAt   DateTime
+  description  String?
+  caloriesKcal Int?
+  proteinGrams Decimal? @db.Decimal(8, 2)
+  carbGrams    Decimal? @db.Decimal(8, 2)
+  fatGrams     Decimal? @db.Decimal(8, 2)
+  source       String?
+  metadata     Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@map("nutrition_entries")
+}
+
+model BiomarkerResult {
+  id             String   @id @default(cuid())
+  userId         String
+  collectedAt    DateTime
+  markerName     String
+  value          Decimal? @db.Decimal(12, 4)
+  unit           String?
+  referenceRange String?
+  provider       String?
+  metadata       Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, markerName, collectedAt])
+  @@map("biomarker_results")
+}
+
+model DeviceIntegration {
+  id                   String            @id @default(cuid())
+  userId               String
+  provider             String
+  status               IntegrationStatus @default(DISCONNECTED)
+  tokenMetadata        Json?
+  syncSettings         Json?
+  lastSyncAt           DateTime?
+  lastSuccessfulSyncAt DateTime?
+
+  syncJobs IntegrationSyncJob[]
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider, status])
+  @@map("device_integrations")
+}
+
+model IntegrationSyncJob {
+  id                  String    @id @default(cuid())
+  userId              String
+  deviceIntegrationId String
+  status              JobStatus @default(PENDING)
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  error               String?
+
+  deviceIntegration DeviceIntegration @relation(fields: [deviceIntegrationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("integration_sync_jobs")
+}
+
+model InsightEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  insightType String
+  summary     String
+  details     Json?
+  sourceRefs  Json?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, insightType, createdAt])
+  @@map("insight_events")
+}
