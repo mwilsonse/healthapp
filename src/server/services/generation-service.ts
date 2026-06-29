@@ -224,11 +224,16 @@ function applyConservativeAdaptation(
         targetDurationSeconds: set.targetDurationSeconds
           ? Math.max(
               1,
-              Math.round(set.targetDurationSeconds * assessment.volumeMultiplier)
+              Math.round(
+                set.targetDurationSeconds * assessment.volumeMultiplier
+              )
             )
           : set.targetDurationSeconds,
         targetReps: set.targetReps
-          ? Math.max(1, Math.floor(set.targetReps * assessment.volumeMultiplier))
+          ? Math.max(
+              1,
+              Math.floor(set.targetReps * assessment.volumeMultiplier)
+            )
           : set.targetReps,
         targetWeightKg: set.targetWeightKg
           ? Number(
@@ -258,11 +263,24 @@ function nextWorkoutDate(
 }
 
 async function buildPlanningInput(db: PrismaClient) {
-  const [profile, goals, equipment, exercises] = await Promise.all([
+  const userResult = await getSingleUser(db);
+
+  if (!userResult.ok) {
+    return userResult;
+  }
+
+  const [profile, goals, equipment, exercises, activePlan] = await Promise.all([
     profileService.getProfile(db),
     goalService.listGoals(db),
     equipmentService.listEquipment(db),
-    exerciseService.listExercises(db)
+    exerciseService.listExercises(db),
+    db.trainingPlan.findFirst({
+      where: {
+        status: PlanStatus.ACTIVE,
+        userId: userResult.data.id
+      },
+      orderBy: { startDate: "desc" }
+    })
   ]);
 
   if (!profile.ok) {
@@ -281,7 +299,23 @@ async function buildPlanningInput(db: PrismaClient) {
     return exercises;
   }
 
+  const committedPlanEdits = activePlan
+    ? await db.planEditCommitment.findMany({
+        orderBy: { createdAt: "desc" },
+        where: {
+          committed: true,
+          trainingPlanId: activePlan.id,
+          userId: userResult.data.id
+        }
+      })
+    : [];
+
   return success({
+    committedPlanEdits: committedPlanEdits.map((edit) => ({
+      changeSummary: edit.changeSummary,
+      committedAt: edit.createdAt.toISOString(),
+      title: edit.title
+    })),
     equipment: equipment.data.map((item) => ({
       availableLoadsKg: item.availableLoads.map((load) => Number(load.loadKg)),
       name: item.name,

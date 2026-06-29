@@ -6,6 +6,7 @@ export { exportService } from "@/server/services/export-service";
 export { goalService } from "@/server/services/goal-service";
 export { generationService } from "@/server/services/generation-service";
 export { jobService } from "@/server/services/job-service";
+export { logService } from "@/server/services/log-service";
 export { planningService } from "@/server/services/planning-service";
 export { profileService } from "@/server/services/profile-service";
 export { workoutService } from "@/server/services/workout-service";

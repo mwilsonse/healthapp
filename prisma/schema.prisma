@@ -158,11 +158,13 @@ model User {
   jobs                Job[]
   measurements        UserMeasurement[]
   nutritionEntries    NutritionEntry[]
+  planEditCommitments PlanEditCommitment[]
   plannedWorkouts     PlannedWorkout[]
   profile             UserProfile?
   rationales          RecommendationRationale[]
   trainingPlans       TrainingPlan[]
   biomarkerResults    BiomarkerResult[]
+  coachChatActions    CoachChatAction[]
 
   @@map("users")
 }
@@ -328,6 +330,7 @@ model TrainingPlan {
   updatedAt            DateTime   @updatedAt
 
   createdByJob    Job?                     @relation("TrainingPlanCreatedByJob", fields: [createdByJobId], references: [id], onDelete: SetNull)
+  editCommitments PlanEditCommitment[]
   plannedWorkouts PlannedWorkout[]
   primaryGoal     Goal?                    @relation(fields: [primaryGoalId], references: [id], onDelete: SetNull)
   rationale       RecommendationRationale? @relation(fields: [rationaleId], references: [id], onDelete: SetNull)
@@ -357,6 +360,7 @@ model PlannedWorkout {
   cardioActivities    CardioActivity[]
   completedWorkouts   CompletedWorkout[]
   createdByJob        Job?                     @relation("PlannedWorkoutCreatedByJob", fields: [createdByJobId], references: [id], onDelete: SetNull)
+  editCommitments     PlanEditCommitment[]
   exercises           PlannedWorkoutExercise[]
   rationale           RecommendationRationale? @relation(fields: [rationaleId], references: [id], onDelete: SetNull)
   supersededByWorkout PlannedWorkout?          @relation("WorkoutSupersession", fields: [supersededByWorkoutId], references: [id], onDelete: SetNull)
@@ -422,14 +426,37 @@ model CompletedWorkout {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  cardioActivities CardioActivity[]
-  coachFeedback    CoachNote?                 @relation(fields: [coachFeedbackId], references: [id], onDelete: SetNull)
-  exercises        CompletedWorkoutExercise[]
-  plannedWorkout   PlannedWorkout?            @relation(fields: [plannedWorkoutId], references: [id], onDelete: SetNull)
-  user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardioActivities   CardioActivity[]
+  coachFeedback      CoachNote?                 @relation(fields: [coachFeedbackId], references: [id], onDelete: SetNull)
+  exercises          CompletedWorkoutExercise[]
+  planEditCommitment PlanEditCommitment?
+  plannedWorkout     PlannedWorkout?            @relation(fields: [plannedWorkoutId], references: [id], onDelete: SetNull)
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, completedAt, status])
   @@map("completed_workouts")
+}
+
+model PlanEditCommitment {
+  id                 String   @id @default(cuid())
+  userId             String
+  trainingPlanId     String
+  plannedWorkoutId   String?
+  completedWorkoutId String?  @unique
+  title              String
+  changeSummary      String
+  committed          Boolean  @default(false)
+  details            Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  completedWorkout CompletedWorkout? @relation(fields: [completedWorkoutId], references: [id], onDelete: SetNull)
+  plannedWorkout   PlannedWorkout?   @relation(fields: [plannedWorkoutId], references: [id], onDelete: SetNull)
+  trainingPlan     TrainingPlan      @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, trainingPlanId, committed])
+  @@map("plan_edit_commitments")
 }
 
 model CompletedWorkoutExercise {
@@ -548,11 +575,34 @@ model AiInteraction {
   createdAt           DateTime          @default(now())
 
   exercisesCreated Exercise[]
+  coachChatActions CoachChatAction[]
   rationales       RecommendationRationale[]
   user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type, createdAt])
   @@map("ai_interactions")
+}
+
+model CoachChatAction {
+  id                  String            @id @default(cuid())
+  userId              String
+  aiInteractionId     String?
+  type                String
+  description         String
+  input               Json?
+  status              CoachActionStatus @default(SUGGESTED)
+  statusMessage       String?
+  confirmedAt         DateTime?
+  appliedAt           DateTime?
+  dismissedAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  aiInteraction AiInteraction? @relation(fields: [aiInteractionId], references: [id], onDelete: SetNull)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@map("coach_chat_actions")
 }
 
 model Job {

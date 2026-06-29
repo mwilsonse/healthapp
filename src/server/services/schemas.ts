@@ -120,7 +120,11 @@ const logWorkoutStatusSchema = z.union([
 ]);
 
 export const intensityAdjustmentSchema = z
-  .union([z.literal("AS_PLANNED"), z.literal("REDUCED"), z.literal("INCREASED")])
+  .union([
+    z.literal("AS_PLANNED"),
+    z.literal("REDUCED"),
+    z.literal("INCREASED")
+  ])
   .default("AS_PLANNED");
 
 export const logWorkoutSetInputSchema = z.object({
@@ -176,6 +180,26 @@ export const completeWorkoutInputSchema = z
     }
   });
 
+export const decidePlanEditCommitmentInputSchema = z.object({
+  commit: z.boolean(),
+  completedWorkoutId: z.string().min(1)
+});
+
+export const coachChatInputSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  plannedWorkoutId: z.string().trim().min(1).optional()
+});
+
+export const coachChatActionDecisionInputSchema = z.object({
+  actionId: z.string().trim().min(1),
+  decision: z.union([z.literal("confirm"), z.literal("dismiss")])
+});
+
+export const resetUserDataInputSchema = z.object({
+  confirmation: z.string().trim(),
+  preserveUser: z.boolean().default(true)
+});
+
 export type UpsertProfileInput = z.infer<typeof upsertProfileInputSchema>;
 export type CreateGoalInput = z.infer<typeof createGoalInputSchema>;
 export type CreateEquipmentInput = z.infer<typeof createEquipmentInputSchema>;
@@ -192,3 +216,11 @@ export type SetExercisePreferenceInput = z.infer<
 export type FilterExercisesInput = z.infer<typeof filterExercisesInputSchema>;
 export type EnqueueJobInput = z.input<typeof enqueueJobInputSchema>;
 export type CompleteWorkoutInput = z.infer<typeof completeWorkoutInputSchema>;
+export type DecidePlanEditCommitmentInput = z.infer<
+  typeof decidePlanEditCommitmentInputSchema
+>;
+export type CoachChatInput = z.infer<typeof coachChatInputSchema>;
+export type CoachChatActionDecisionInput = z.infer<
+  typeof coachChatActionDecisionInputSchema
+>;
+export type ResetUserDataInput = z.infer<typeof resetUserDataInputSchema>;
