@@ -4,13 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "ulimit -n 10000 && next dev",
+    "docker:config": "docker compose config",
+    "docker:db": "docker compose up -d postgres",
+    "docker:dev": "docker compose up --build",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "worker": "tsx src/worker/index.ts",
+    "backup:postgres": "bash docker/backup.sh"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
@@ -40,6 +45,7 @@
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

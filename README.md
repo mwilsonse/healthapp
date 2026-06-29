@@ -37,6 +37,23 @@ cp .env.example .env
 
 Application scaffolding begins in Phase 1.
 
+## Common Commands
+
+Use `pnpm` for project scripts.
+
+```bash
+pnpm dev
+pnpm run lint
+pnpm run typecheck
+pnpm test
+pnpm run build
+pnpm worker
+pnpm run docker:config
+pnpm run docker:db
+pnpm run docker:dev
+pnpm run backup:postgres
+```
+
 ## Deployment Direction
 
 The default runtime target is Synology NAS or Linux using Docker Compose.

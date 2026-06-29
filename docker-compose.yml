@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: healthapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-phip}
+      POSTGRES_USER: ${POSTGRES_USER:-phip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-phip-dev-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ${POSTGRES_DATA_DIR:-./docker-data/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: healthapp-web
+    restart: unless-stopped
+    command: pnpm start
+    environment:
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      APP_SECRET: ${APP_SECRET:-replace-with-local-random-secret}
+      APP_ACCESS_PASSCODE: ${APP_ACCESS_PASSCODE:-replace-with-local-passcode}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://phip:phip-dev-password@postgres:5432/phip?schema=public}
+      AI_PROVIDER: ${AI_PROVIDER:-fake}
+      AI_API_KEY: ${AI_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: healthapp-worker
+    restart: unless-stopped
+    command: pnpm worker
+    environment:
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      APP_SECRET: ${APP_SECRET:-replace-with-local-random-secret}
+      APP_ACCESS_PASSCODE: ${APP_ACCESS_PASSCODE:-replace-with-local-passcode}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://phip:phip-dev-password@postgres:5432/phip?schema=public}
+      AI_PROVIDER: ${AI_PROVIDER:-fake}
+      AI_API_KEY: ${AI_API_KEY:-}
+      JOB_WORKER_CONCURRENCY: ${JOB_WORKER_CONCURRENCY:-1}
+      JOB_MAX_RETRIES: ${JOB_MAX_RETRIES:-3}
+      JOB_POLL_INTERVAL_MS: ${JOB_POLL_INTERVAL_MS:-5000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backup:
+    build:
+      context: .
+      dockerfile: docker/backup.Dockerfile
+    container_name: healthapp-backup
+    profiles: ["backup"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-phip}
+      POSTGRES_USER: ${POSTGRES_USER:-phip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-phip-dev-password}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ${BACKUP_DIR:-./backups/postgres}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
