@@ -99,4 +99,21 @@ describe("service input schemas", () => {
       );
     }
   });
+  it("allows substitutions without a reason", () => {
+    const parsed = completeWorkoutInputSchema.safeParse({
+      exercises: [
+        {
+          plannedWorkoutExerciseId: "planned-exercise-1",
+          sets: [{ actualReps: 8, plannedWorkoutSetId: "planned-set-1" }],
+          substitutionExerciseName: "Goblet squat"
+        }
+      ],
+      intensityAdjustment: "AS_PLANNED",
+      plannedWorkoutId: "workout-1",
+      status: "COMPLETED"
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
 });

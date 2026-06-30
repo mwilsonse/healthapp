@@ -141,23 +141,13 @@ export const logWorkoutSetInputSchema = z.object({
   status: z.nativeEnum(SetStatus).default(SetStatus.COMPLETED)
 });
 
-export const logWorkoutExerciseInputSchema = z
-  .object({
-    notes: z.string().trim().optional(),
-    plannedWorkoutExerciseId: z.string().min(1),
-    sets: z.array(logWorkoutSetInputSchema).default([]),
-    substitutionExerciseName: z.string().trim().optional(),
-    substitutionReason: z.string().trim().optional()
-  })
-  .superRefine((input, context) => {
-    if (input.substitutionExerciseName && !input.substitutionReason) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Substitution reason is required.",
-        path: ["substitutionReason"]
-      });
-    }
-  });
+export const logWorkoutExerciseInputSchema = z.object({
+  notes: z.string().trim().optional(),
+  plannedWorkoutExerciseId: z.string().min(1),
+  sets: z.array(logWorkoutSetInputSchema).default([]),
+  substitutionExerciseName: z.string().trim().optional(),
+  substitutionReason: z.string().trim().optional()
+});
 
 export const extraWorkoutExerciseInputSchema = z.object({
   exerciseName: z.string().trim().min(1, "Exercise name is required."),

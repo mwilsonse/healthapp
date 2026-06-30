@@ -438,7 +438,7 @@ export function WorkoutLogForm({ action, workout }: WorkoutLogFormProps) {
                 </label>
                 <label className="text-sm md:col-span-2">
                   <span className="text-muted-foreground">
-                    Substitution reason
+                    Substitution reason (optional)
                   </span>
                   <input
                     className={`${fieldClassName} mt-1`}
