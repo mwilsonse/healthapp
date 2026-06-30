@@ -1,4 +1,5 @@
 export {
+  coachChatActionOutputSchema,
   coachChatOutputV1Schema,
   coachNoteRefreshOutputV1Schema,
   plannedWorkoutOutputV1Schema,

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   coachChatActionDecisionInputSchema,
   coachChatInputSchema,
+  completeWorkoutInputSchema,
   createEquipmentInputSchema,
   enqueueJobInputSchema,
   resetUserDataInputSchema
@@ -82,5 +83,20 @@ describe("service input schemas", () => {
     ).toMatchObject({
       preserveUser: false
     });
+  });
+
+  it("requires logged work before completing a workout", () => {
+    const parsed = completeWorkoutInputSchema.safeParse({
+      intensityAdjustment: "AS_PLANNED",
+      plannedWorkoutId: "workout-1",
+      status: "COMPLETED"
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.exercises).toContain(
+        "Log at least one exercise before completing the workout."
+      );
+    }
   });
 });

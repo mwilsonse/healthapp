@@ -8,6 +8,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { resetHealthDataAction } from "@/features/profile/actions";
+import {
+  formatInchesFromCentimeters,
+  formatPoundsFromKilograms
+} from "@/lib/units";
 import { RESET_USER_DATA_CONFIRMATION } from "@/server/services/export-service";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +33,30 @@ function Section({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm leading-6 text-muted-foreground">{children}</p>;
+}
+
+function formatHeight(value?: unknown) {
+  if (value === null || value === undefined) {
+    return "Not set";
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric)
+    ? formatInchesFromCentimeters(numeric)
+    : "Not set";
+}
+
+function formatWeight(value?: unknown) {
+  if (value === null || value === undefined) {
+    return "Not set";
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric)
+    ? formatPoundsFromKilograms(numeric)
+    : "Not set";
 }
 
 export default async function ProfilePage() {
@@ -57,13 +85,11 @@ export default async function ProfilePage() {
           <dl className="grid gap-2 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Height</dt>
-              <dd>{profile.data.heightCm?.toString() ?? "Not set"} cm</dd>
+              <dd>{formatHeight(profile.data.heightCm)}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Current weight</dt>
-              <dd>
-                {profile.data.currentWeightKg?.toString() ?? "Not set"} kg
-              </dd>
+              <dd>{formatWeight(profile.data.currentWeightKg)}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Resting HR</dt>

@@ -135,8 +135,9 @@ export const logWorkoutSetInputSchema = z.object({
   actualRpe: decimalNumberSchema,
   actualWeightKg: decimalNumberSchema,
   notes: z.string().trim().optional(),
+  orderIndex: z.number().int().nonnegative().optional(),
   painFlag: z.boolean().default(false),
-  plannedWorkoutSetId: z.string().min(1),
+  plannedWorkoutSetId: z.string().min(1).optional(),
   status: z.nativeEnum(SetStatus).default(SetStatus.COMPLETED)
 });
 
@@ -158,10 +159,17 @@ export const logWorkoutExerciseInputSchema = z
     }
   });
 
+export const extraWorkoutExerciseInputSchema = z.object({
+  exerciseName: z.string().trim().min(1, "Exercise name is required."),
+  notes: z.string().trim().optional(),
+  sets: z.array(logWorkoutSetInputSchema).min(1, "Add at least one set.")
+});
+
 export const completeWorkoutInputSchema = z
   .object({
     durationAdjustmentMinutes: z.number().int().optional(),
     exercises: z.array(logWorkoutExerciseInputSchema).default([]),
+    extraExercises: z.array(extraWorkoutExerciseInputSchema).default([]),
     intensityAdjustment: intensityAdjustmentSchema,
     overallRpe: decimalNumberSchema,
     painNotes: z.string().trim().optional(),
@@ -176,6 +184,18 @@ export const completeWorkoutInputSchema = z
         code: z.ZodIssueCode.custom,
         message: "Skip reason is required.",
         path: ["skipReason"]
+      });
+    }
+
+    if (
+      input.status !== WorkoutStatus.SKIPPED &&
+      input.exercises.length === 0 &&
+      input.extraExercises.length === 0
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Log at least one exercise before completing the workout.",
+        path: ["exercises"]
       });
     }
   });

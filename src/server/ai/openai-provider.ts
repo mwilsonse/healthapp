@@ -1,3 +1,6 @@
+import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+
 import { getEnv } from "@/server/env";
 import type {
   AiProvider,
@@ -5,27 +8,13 @@ import type {
   AiProviderResponse
 } from "@/server/ai/provider";
 
-interface OpenAiChatCompletionResponse {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-    };
-  }>;
-  model?: string;
-  usage?: unknown;
-}
-
-function parseJsonContent(content: string) {
-  try {
-    return JSON.parse(content) as unknown;
-  } catch {
-    throw new Error("OpenAI response was not valid JSON.");
-  }
+function schemaFormatName(schemaName: string, schemaVersion: string) {
+  return `${schemaName}_v${schemaVersion}`.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
 export const openAiProvider: AiProvider = {
-  async generateJson<TInput>(
-    request: AiProviderRequest<TInput>
+  async generateJson<TInput, TOutput>(
+    request: AiProviderRequest<TInput, TOutput>
   ): Promise<AiProviderResponse> {
     const env = getEnv();
 
@@ -33,53 +22,43 @@ export const openAiProvider: AiProvider = {
       throw new Error("AI_API_KEY is required when AI_PROVIDER is openai.");
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      body: JSON.stringify({
-        messages: [
-          {
-            content:
-              request.systemPrompt ??
-              "You are the PHIP coaching engine. Return only valid JSON.",
-            role: "system"
-          },
-          {
-            content: JSON.stringify({
-              input: request.input,
-              outputSchemaName: request.schemaName,
-              outputSchemaVersion: request.schemaVersion,
-              task: request.userPrompt
-            }),
-            role: "user"
-          }
-        ],
-        model: env.AI_MODEL,
-        response_format: { type: "json_object" },
-        temperature: 0.2
-      }),
-      headers: {
-        Authorization: `Bearer ${env.AI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      method: "POST"
+    const client = new OpenAI({ apiKey: env.AI_API_KEY });
+    const completion = await client.chat.completions.parse({
+      messages: [
+        {
+          content:
+            request.systemPrompt ??
+            "You are the PHIP coaching engine. Return only valid JSON matching the requested schema.",
+          role: "system"
+        },
+        {
+          content: JSON.stringify({
+            input: request.input,
+            outputSchemaName: request.schemaName,
+            outputSchemaVersion: request.schemaVersion,
+            task: request.userPrompt
+          }),
+          role: "user"
+        }
+      ],
+      model: env.AI_MODEL,
+      response_format: zodResponseFormat(
+        request.schema,
+        schemaFormatName(request.schemaName, request.schemaVersion)
+      ),
+      temperature: 0.2
     });
+    const parsed = completion.choices[0]?.message.parsed;
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`OpenAI request failed with ${response.status}: ${body}`);
-    }
-
-    const data = (await response.json()) as OpenAiChatCompletionResponse;
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error("OpenAI response did not include message content.");
+    if (!parsed) {
+      throw new Error("OpenAI response did not include parsed content.");
     }
 
     return {
-      model: data.model ?? env.AI_MODEL,
-      output: parseJsonContent(content),
+      model: completion.model ?? env.AI_MODEL,
+      output: parsed,
       provider: "openai",
-      tokenUsage: data.usage as AiProviderResponse["tokenUsage"]
+      tokenUsage: completion.usage as AiProviderResponse["tokenUsage"]
     };
   }
 };

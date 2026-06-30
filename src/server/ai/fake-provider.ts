@@ -16,37 +16,58 @@ const plannedWorkoutFixture = {
       restSeconds: 90,
       sets: [
         {
+          notes: null,
           orderIndex: 0,
+          targetDistanceMeters: null,
+          targetDurationSeconds: null,
           targetReps: 10,
           targetRir: 2,
+          targetRpe: null,
           targetWeightKg: 16
         },
         {
+          notes: null,
           orderIndex: 1,
+          targetDistanceMeters: null,
+          targetDurationSeconds: null,
           targetReps: 10,
           targetRir: 2,
+          targetRpe: null,
           targetWeightKg: 16
         }
       ],
-      targetRir: 2
+      targetRir: 2,
+      targetRpe: null
     },
     {
       exerciseName: "Push-Up",
+      notes: null,
       orderIndex: 1,
       restSeconds: 75,
       sets: [
         {
+          notes: null,
           orderIndex: 0,
+          targetDistanceMeters: null,
+          targetDurationSeconds: null,
           targetReps: 8,
-          targetRir: 2
+          targetRir: 2,
+          targetRpe: null,
+          targetWeightKg: null
         },
         {
+          notes: null,
           orderIndex: 1,
+          targetDistanceMeters: null,
+          targetDurationSeconds: null,
           targetReps: 8,
-          targetRir: 2
+          targetRir: 2,
+          targetRpe: null,
+          targetWeightKg: null
         }
       ],
-      targetRir: 2
+      targetRir: 2,
+      targetRpe: null
     }
   ],
   rationale:
@@ -107,6 +128,7 @@ function fixtureForSchema(schemaName: string, input?: unknown) {
     return {
       notes: [
         {
+          expiresAt: null,
           message:
             "Keep two reps in reserve on primary strength work this week.",
           priority: "medium",
@@ -157,8 +179,8 @@ function fixtureForSchema(schemaName: string, input?: unknown) {
 }
 
 export const fakeAiProvider: AiProvider = {
-  async generateJson<TInput>(
-    request: AiProviderRequest<TInput>
+  async generateJson<TInput, TOutput>(
+    request: AiProviderRequest<TInput, TOutput>
   ): Promise<AiProviderResponse> {
     return {
       model: "fake-deterministic-v1",

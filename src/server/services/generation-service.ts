@@ -196,7 +196,10 @@ function constrainSetLoad(
   };
 }
 
-function noteWithAdaptation(note: string | undefined, assessmentNote: string) {
+function noteWithAdaptation(
+  note: string | null | undefined,
+  assessmentNote: string
+) {
   return [note, assessmentNote].filter(Boolean).join(" ");
 }
 

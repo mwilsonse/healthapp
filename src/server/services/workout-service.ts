@@ -65,9 +65,10 @@ function notesWithAdjustments(input: CompleteWorkoutInput) {
   return [input.userNotes, ...adjustments].filter(Boolean).join(" ");
 }
 
-async function findOrCreateSubstitutionExercise(
+async function findOrCreateLoggedExercise(
   name: string,
-  db: Prisma.TransactionClient
+  db: Prisma.TransactionClient,
+  createdByUserId?: string
 ) {
   const normalizedName = normalizeExerciseName(name);
   const existing = await db.exercise.findUnique({ where: { normalizedName } });
@@ -78,6 +79,7 @@ async function findOrCreateSubstitutionExercise(
 
   return db.exercise.create({
     data: {
+      createdByUserId,
       equipmentTypes: ["bodyweight"],
       modality: ExerciseModality.STRENGTH,
       movementPattern: MovementPattern.OTHER,
@@ -110,7 +112,9 @@ function hasSkippedOrMissingSets(
     }
 
     const setLogs = new Map(
-      exerciseLog.sets.map((set) => [set.plannedWorkoutSetId, set])
+      exerciseLog.sets
+        .filter((set) => set.plannedWorkoutSetId)
+        .map((set) => [set.plannedWorkoutSetId as string, set])
     );
 
     return plannedExercise.sets.some((plannedSet) => {
@@ -396,7 +400,7 @@ export const workoutService = {
           const substitutionName =
             exerciseLog?.substitutionExerciseName?.trim();
           const completedExerciseSource = substitutionName
-            ? await findOrCreateSubstitutionExercise(substitutionName, tx)
+            ? await findOrCreateLoggedExercise(substitutionName, tx)
             : plannedExercise.exercise;
 
           const completedExercise = await tx.completedWorkoutExercise.create({
@@ -414,10 +418,12 @@ export const workoutService = {
           });
 
           const setLogs = new Map(
-            (exerciseLog?.sets ?? []).map((set) => [
-              set.plannedWorkoutSetId,
-              set
-            ])
+            (exerciseLog?.sets ?? [])
+              .filter((set) => set.plannedWorkoutSetId)
+              .map((set) => [set.plannedWorkoutSetId as string, set])
+          );
+          const extraSetLogs = (exerciseLog?.sets ?? []).filter(
+            (set) => !set.plannedWorkoutSetId
           );
 
           for (const plannedSet of plannedExercise.sets) {
@@ -437,6 +443,60 @@ export const workoutService = {
                 painFlag: setLog?.painFlag ?? false,
                 plannedWorkoutSetId: plannedSet.id,
                 status: setLog?.status ?? SetStatus.SKIPPED
+              }
+            });
+          }
+
+          for (const [index, setLog] of extraSetLogs.entries()) {
+            await tx.completedExerciseSet.create({
+              data: {
+                actualDistanceMeters: setLog.actualDistanceMeters,
+                actualDurationSeconds: setLog.actualDurationSeconds,
+                actualReps: setLog.actualReps,
+                actualRir: setLog.actualRir,
+                actualRpe: setLog.actualRpe,
+                actualWeightKg: setLog.actualWeightKg,
+                completedWorkoutExerciseId: completedExercise.id,
+                notes: setLog.notes,
+                orderIndex:
+                  setLog.orderIndex ?? plannedExercise.sets.length + index,
+                painFlag: setLog.painFlag,
+                status: setLog.status
+              }
+            });
+          }
+        }
+
+        for (const [exerciseIndex, exerciseLog] of parsed.data.extraExercises.entries()) {
+          const exercise = await findOrCreateLoggedExercise(
+            exerciseLog.exerciseName,
+            tx,
+            userResult.data.id
+          );
+          const completedExercise = await tx.completedWorkoutExercise.create({
+            data: {
+              completedWorkoutId: completedWorkout.id,
+              exerciseId: exercise.id,
+              nameSnapshot: exercise.name,
+              notes: exerciseLog.notes,
+              orderIndex: plannedWorkout.exercises.length + exerciseIndex
+            }
+          });
+
+          for (const [setIndex, setLog] of exerciseLog.sets.entries()) {
+            await tx.completedExerciseSet.create({
+              data: {
+                actualDistanceMeters: setLog.actualDistanceMeters,
+                actualDurationSeconds: setLog.actualDurationSeconds,
+                actualReps: setLog.actualReps,
+                actualRir: setLog.actualRir,
+                actualRpe: setLog.actualRpe,
+                actualWeightKg: setLog.actualWeightKg,
+                completedWorkoutExerciseId: completedExercise.id,
+                notes: setLog.notes,
+                orderIndex: setLog.orderIndex ?? setIndex,
+                painFlag: setLog.painFlag,
+                status: setLog.status
               }
             });
           }

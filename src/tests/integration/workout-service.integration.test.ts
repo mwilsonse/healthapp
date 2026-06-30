@@ -39,7 +39,9 @@ async function clearWorkoutData() {
     where: { userId: TEST_USER_ID }
   });
   await prisma.aiInteraction.deleteMany({ where: { userId: TEST_USER_ID } });
-  await prisma.exercise.deleteMany({ where: { normalizedName: "test-squat" } });
+  await prisma.exercise.deleteMany({
+    where: { normalizedName: { in: ["test-squat", "test-row"] } }
+  });
 }
 
 async function createPlannedWorkout() {
@@ -204,6 +206,107 @@ describe("workoutService integration", () => {
         );
       })
     ).toBe(true);
+  });
+
+  it("logs added sets and extra exercises without planned ids", async () => {
+    const { plannedExercise, plannedSet, workout } = await createPlannedWorkout();
+
+    const completed = await workoutService.completeWorkout(
+      {
+        exercises: [
+          {
+            plannedWorkoutExerciseId: plannedExercise.id,
+            sets: [
+              {
+                actualReps: 10,
+                actualWeightKg: 15,
+                plannedWorkoutSetId: plannedSet.id,
+                status: SetStatus.COMPLETED
+              },
+              {
+                actualReps: 12,
+                actualWeightKg: 10,
+                status: SetStatus.COMPLETED
+              }
+            ]
+          }
+        ],
+        extraExercises: [
+          {
+            exerciseName: "Test Row",
+            sets: [
+              {
+                actualReps: 15,
+                status: SetStatus.COMPLETED
+              }
+            ]
+          }
+        ],
+        intensityAdjustment: "AS_PLANNED",
+        plannedWorkoutId: workout.id,
+        status: WorkoutStatus.COMPLETED
+      },
+      new Date("2026-06-29T15:45:00.000Z")
+    );
+
+    expect(completed.ok).toBe(true);
+    if (!completed.ok) {
+      return;
+    }
+
+    const saved = await prisma.completedWorkout.findUniqueOrThrow({
+      include: {
+        exercises: {
+          include: {
+            sets: {
+              orderBy: { orderIndex: "asc" }
+            }
+          },
+          orderBy: { orderIndex: "asc" }
+        }
+      },
+      where: { id: completed.data.id }
+    });
+    const plannedLog = saved.exercises.find(
+      (exercise) => exercise.plannedWorkoutExerciseId === plannedExercise.id
+    );
+    const extraLog = saved.exercises.find(
+      (exercise) => exercise.nameSnapshot === "Test Row"
+    );
+
+    expect(plannedLog?.sets).toHaveLength(2);
+    expect(plannedLog?.sets[1].plannedWorkoutSetId).toBeNull();
+    expect(Number(plannedLog?.sets[1].actualWeightKg)).toBe(10);
+    expect(extraLog?.plannedWorkoutExerciseId).toBeNull();
+    expect(extraLog?.sets[0].plannedWorkoutSetId).toBeNull();
+    expect(extraLog?.sets[0].actualReps).toBe(15);
+  });
+
+  it("marks completed workouts partial when a planned set is skipped", async () => {
+    const { plannedExercise, plannedSet, workout } = await createPlannedWorkout();
+
+    const completed = await workoutService.completeWorkout(
+      {
+        exercises: [
+          {
+            plannedWorkoutExerciseId: plannedExercise.id,
+            sets: [
+              {
+                plannedWorkoutSetId: plannedSet.id,
+                status: SetStatus.SKIPPED
+              }
+            ]
+          }
+        ],
+        intensityAdjustment: "AS_PLANNED",
+        plannedWorkoutId: workout.id,
+        status: WorkoutStatus.COMPLETED
+      },
+      new Date("2026-06-29T15:45:00.000Z")
+    );
+
+    expect(completed.ok).toBe(true);
+    expect(completed.ok && completed.data.status).toBe(WorkoutStatus.PARTIAL);
   });
 
   it("worker creates feedback and a conservatively adapted next workout", async () => {

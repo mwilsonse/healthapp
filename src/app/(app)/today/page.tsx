@@ -2,12 +2,10 @@ import { JobStatus, JobType, WorkoutStatus, type Job } from "@prisma/client";
 import {
   AlertCircle,
   CalendarPlus,
-  Check,
   CheckCircle2,
   Clock3,
   Dumbbell,
   LoaderCircle,
-  Minus,
   Play,
   Sparkles
 } from "lucide-react";
@@ -20,6 +18,10 @@ import {
   skipWorkoutAction,
   startWorkoutAction
 } from "@/features/workouts/actions";
+import {
+  WorkoutLogForm,
+  type WorkoutLogUi
+} from "@/features/workouts/workout-log-form";
 import { formatPoundsFromKilograms } from "@/lib/units";
 import { coachService, jobService, workoutService } from "@/server/services";
 
@@ -110,10 +112,6 @@ function fieldClassName() {
   return "h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 }
 
-function smallFieldClassName() {
-  return "h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
-}
-
 function statusLabel(status: WorkoutStatus) {
   switch (status) {
     case WorkoutStatus.IN_PROGRESS:
@@ -196,6 +194,58 @@ function chatActionUi(actions: CoachChatActionUi[]): CoachChatActionUi[] {
     statusLabel: action.statusLabel,
     type: action.type
   }));
+}
+
+function nullableNumber(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function workoutLogUi(workout: {
+  exercises: Array<{
+    exercise: { instructions: string | null };
+    id: string;
+    nameSnapshot: string;
+    notes: string | null;
+    restSeconds: number | null;
+    sets: Array<{
+      id: string;
+      notes: string | null;
+      orderIndex: number;
+      targetDistanceMeters: number | null;
+      targetDurationSeconds: number | null;
+      targetReps: number | null;
+      targetRpe: unknown;
+      targetWeightKg: unknown;
+    }>;
+  }>;
+  id: string;
+}): WorkoutLogUi {
+  return {
+    exercises: workout.exercises.map((exercise) => ({
+      formTip: exercise.exercise.instructions ?? exercise.notes,
+      id: exercise.id,
+      nameSnapshot: exercise.nameSnapshot,
+      notes: exercise.notes,
+      restSeconds: exercise.restSeconds,
+      sets: exercise.sets.map((set) => ({
+        id: set.id,
+        notes: set.notes,
+        orderIndex: set.orderIndex,
+        targetDistanceMeters: set.targetDistanceMeters,
+        targetDurationSeconds: set.targetDurationSeconds,
+        targetReps: set.targetReps,
+        targetRpe: nullableNumber(set.targetRpe),
+        targetWeightKg: nullableNumber(set.targetWeightKg)
+      }))
+    })),
+    id: workout.id
+  };
 }
 
 export default async function TodayPage({ searchParams }: TodayPageProps) {
@@ -369,13 +419,13 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
 
       {canLog ? (
         <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-          <h2 className="text-base font-semibold">Quick controls</h2>
+          <h2 className="text-base font-semibold">Workout adjustment</h2>
           <div className="mt-3 grid gap-3 md:grid-cols-[1fr_12rem]">
             <div className="grid gap-2 sm:grid-cols-3">
               {[
                 ["AS_PLANNED", "As planned"],
-                ["REDUCED", "Reduce"],
-                ["INCREASED", "Increase"]
+                ["REDUCED", "Reduced"],
+                ["INCREASED", "Increased"]
               ].map(([value, label]) => (
                 <label
                   className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
@@ -410,12 +460,12 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
         <h2 className="text-base font-semibold">
           {canLog ? "Log exercises" : "Exercises"}
         </h2>
-        <form
-          action={completeWorkoutAction}
-          className="space-y-3"
-          id="workout-log-form"
-        >
-          <input name="plannedWorkoutId" type="hidden" value={workout.id} />
+        {canLog ? (
+          <WorkoutLogForm
+            action={completeWorkoutAction}
+            workout={workoutLogUi(workout)}
+          />
+        ) : (
           <div className="space-y-3">
             {workout.exercises.length === 0 ? (
               <div className="rounded-lg border border-border bg-card p-4 text-sm leading-6 text-muted-foreground shadow-sm">
@@ -441,42 +491,6 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
                     {exercise.notes}
                   </p>
                 ) : null}
-
-                {canLog ? (
-                  <input
-                    name="plannedWorkoutExerciseId"
-                    type="hidden"
-                    value={exercise.id}
-                  />
-                ) : null}
-
-                {canLog ? (
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <label className="text-sm">
-                      <span className="text-muted-foreground">
-                        Substitute exercise
-                      </span>
-                      <input
-                        className={`${fieldClassName()} mt-1`}
-                        name={`substitutionExerciseName:${exercise.id}`}
-                        placeholder={exercise.nameSnapshot}
-                        type="text"
-                      />
-                    </label>
-                    <label className="text-sm md:col-span-2">
-                      <span className="text-muted-foreground">
-                        Substitution reason
-                      </span>
-                      <input
-                        className={`${fieldClassName()} mt-1`}
-                        name={`substitutionReason:${exercise.id}`}
-                        placeholder="Reason"
-                        type="text"
-                      />
-                    </label>
-                  </div>
-                ) : null}
-
                 <div className="mt-3 divide-y divide-border rounded-md border border-border">
                   {exercise.sets.map((set) => (
                     <div className="grid gap-3 px-3 py-3 text-sm" key={set.id}>
@@ -493,155 +507,14 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
                           {set.notes}
                         </span>
                       ) : null}
-                      {canLog ? (
-                        <div className="grid gap-2 md:grid-cols-[7rem_repeat(4,minmax(0,1fr))_6rem]">
-                          <input
-                            name={`plannedWorkoutSetId:${exercise.id}`}
-                            type="hidden"
-                            value={set.id}
-                          />
-                          <select
-                            className={smallFieldClassName()}
-                            name={`setStatus:${set.id}`}
-                          >
-                            <option value="COMPLETED">Logged</option>
-                            <option value="SKIPPED">Skipped</option>
-                          </select>
-                          <input
-                            className={smallFieldClassName()}
-                            defaultValue={set.targetReps ?? ""}
-                            min="0"
-                            name={`actualReps:${set.id}`}
-                            placeholder="Reps"
-                            type="number"
-                          />
-                          <input
-                            className={smallFieldClassName()}
-                            defaultValue={
-                              set.targetWeightKg
-                                ? Number(set.targetWeightKg).toFixed(1)
-                                : ""
-                            }
-                            min="0"
-                            name={`actualWeightKg:${set.id}`}
-                            placeholder="Kg"
-                            step="0.1"
-                            type="number"
-                          />
-                          <input
-                            className={smallFieldClassName()}
-                            defaultValue={
-                              set.targetDurationSeconds
-                                ? Math.round(set.targetDurationSeconds)
-                                : ""
-                            }
-                            min="0"
-                            name={`actualDurationSeconds:${set.id}`}
-                            placeholder="Sec"
-                            type="number"
-                          />
-                          <input
-                            className={smallFieldClassName()}
-                            defaultValue={
-                              set.targetRpe
-                                ? Number(set.targetRpe).toFixed(1)
-                                : ""
-                            }
-                            min="0"
-                            name={`actualRpe:${set.id}`}
-                            placeholder="RPE"
-                            step="0.5"
-                            type="number"
-                          />
-                          <label className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-xs">
-                            <input
-                              name={`painFlag:${set.id}`}
-                              type="checkbox"
-                            />
-                            Pain
-                          </label>
-                          <input
-                            className={`${smallFieldClassName()} md:col-span-6`}
-                            name={`setNotes:${set.id}`}
-                            placeholder="Set notes"
-                            type="text"
-                          />
-                        </div>
-                      ) : null}
                     </div>
                   ))}
                 </div>
-
-                {canLog ? (
-                  <label className="mt-3 block text-sm">
-                    <span className="text-muted-foreground">
-                      Exercise notes
-                    </span>
-                    <input
-                      className={`${fieldClassName()} mt-1`}
-                      name={`exerciseNotes:${exercise.id}`}
-                      type="text"
-                    />
-                  </label>
-                ) : null}
               </article>
             ))}
           </div>
-          {canLog ? (
-            <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-              <h2 className="text-base font-semibold">Finish workout</h2>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <label className="text-sm">
-                  <span className="text-muted-foreground">Overall RPE</span>
-                  <input
-                    className={`${fieldClassName()} mt-1`}
-                    min="0"
-                    name="overallRpe"
-                    step="0.5"
-                    type="number"
-                  />
-                </label>
-                <label className="text-sm md:col-span-2">
-                  <span className="text-muted-foreground">Pain notes</span>
-                  <input
-                    className={`${fieldClassName()} mt-1`}
-                    name="painNotes"
-                    type="text"
-                  />
-                </label>
-                <label className="text-sm md:col-span-3">
-                  <span className="text-muted-foreground">Workout notes</span>
-                  <input
-                    className={`${fieldClassName()} mt-1`}
-                    name="userNotes"
-                    type="text"
-                  />
-                </label>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <SubmitButton
-                  name="completionStatus"
-                  pendingLabel="Saving"
-                  value="COMPLETED"
-                >
-                  <Check aria-hidden="true" className="h-4 w-4" />
-                  Complete
-                </SubmitButton>
-                <SubmitButton
-                  name="completionStatus"
-                  pendingLabel="Saving"
-                  value="PARTIAL"
-                  variant="outline"
-                >
-                  <Minus aria-hidden="true" className="h-4 w-4" />
-                  Save partial
-                </SubmitButton>
-              </div>
-            </section>
-          ) : null}
-        </form>
+        )}
       </section>
-
       {activeLoggingStatuses.includes(workout.status) ? (
         <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <h2 className="text-base font-semibold">Skip workout</h2>

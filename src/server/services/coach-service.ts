@@ -74,7 +74,7 @@ function isSupportedCoachActionType(
   return supportedCoachActionTypes.includes(value as SupportedCoachActionType);
 }
 
-function parseOptionalDate(value?: string) {
+function parseOptionalDate(value?: string | null) {
   if (!value) {
     return undefined;
   }

@@ -1,7 +1,9 @@
 import type { Prisma } from "@prisma/client";
+import type { z } from "zod";
 
-export interface AiProviderRequest<TInput> {
+export interface AiProviderRequest<TInput, TOutput = unknown> {
   input: TInput;
+  schema: z.ZodType<TOutput>;
   schemaName: string;
   schemaVersion: string;
   systemPrompt?: string;
@@ -16,7 +18,7 @@ export interface AiProviderResponse {
 }
 
 export interface AiProvider {
-  generateJson<TInput>(
-    request: AiProviderRequest<TInput>
+  generateJson<TInput, TOutput>(
+    request: AiProviderRequest<TInput, TOutput>
   ): Promise<AiProviderResponse>;
 }

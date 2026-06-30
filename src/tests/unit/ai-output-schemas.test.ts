@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { describe, expect, it } from "vitest";
 
 import {
+  coachChatActionOutputSchema,
   coachChatOutputV1Schema,
   coachNoteRefreshOutputV1Schema,
   fakeAiProvider,
@@ -50,6 +51,7 @@ describe("AI output schemas", () => {
     async (testCase) => {
       const response = await fakeAiProvider.generateJson({
         input: { userId: "default-user" },
+        schema: testCase.schema,
         schemaName: testCase.name,
         schemaVersion: "1"
       });
@@ -70,5 +72,27 @@ describe("AI output schemas", () => {
     );
 
     expect(validated.ok).toBe(false);
+  });
+
+  it("rejects unsupported coach chat action types", () => {
+    const validated = coachChatActionOutputSchema.safeParse({
+      confirmationRequired: true,
+      description: "Do something unsupported.",
+      input: {},
+      type: "delete_all_data"
+    });
+
+    expect(validated.success).toBe(false);
+  });
+
+  it("rejects arbitrary coach chat action input keys", () => {
+    const validated = coachChatActionOutputSchema.safeParse({
+      confirmationRequired: true,
+      description: "Generate today's workout.",
+      input: { extra: true },
+      type: "generate_today_workout"
+    });
+
+    expect(validated.success).toBe(false);
   });
 });

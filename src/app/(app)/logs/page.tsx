@@ -7,7 +7,11 @@ import {
   Target
 } from "lucide-react";
 
-import { formatPoundsFromKilograms } from "@/lib/units";
+import {
+  formatPoundsFromKilograms,
+  kilogramsToPounds,
+  roundTo
+} from "@/lib/units";
 import { logService } from "@/server/services";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +65,12 @@ function workoutStatusTone(status: WorkoutStatus) {
 
 function setLine(parts: Array<string | null | undefined>) {
   return parts.filter(Boolean).join(" · ");
+}
+
+function formatWeightChange(changeKg: number) {
+  const changeLb = roundTo(kilogramsToPounds(changeKg), 1);
+
+  return `${changeLb >= 0 ? "+" : ""}${changeLb} lb`;
 }
 
 function plannedLine(set: {
@@ -204,9 +214,7 @@ export default async function LogsPage() {
                     ? formatPoundsFromKilograms(trend.latestWeightKg)
                     : "not logged"}
                   {trend.loadChangeKg !== null
-                    ? ` · change ${trend.loadChangeKg >= 0 ? "+" : ""}${
-                        trend.loadChangeKg
-                      } kg`
+                    ? ` · change ${formatWeightChange(trend.loadChangeKg)}`
                     : ""}
                 </p>
               </div>
