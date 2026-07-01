@@ -12,6 +12,7 @@ import {
   kilogramsToPounds,
   roundTo
 } from "@/lib/units";
+import { formatLoggedDuration } from "@/lib/duration";
 import { logService } from "@/server/services";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +27,7 @@ function formatDateTime(date: Date) {
 }
 
 function formatDuration(seconds?: number | null) {
-  if (!seconds) {
-    return null;
-  }
-
-  return `${Math.round(seconds / 60)} min`;
+  return formatLoggedDuration(seconds);
 }
 
 function formatWeight(value?: unknown) {
@@ -215,7 +212,9 @@ export default async function LogsPage() {
                     : "not logged"}
                   {trend.loadChangeKg !== null
                     ? ` · change ${formatWeightChange(trend.loadChangeKg)}`
-                    : ""}
+                    : trend.latestWeightKg
+                      ? " · baseline"
+                      : ""}
                 </p>
               </div>
             ))}

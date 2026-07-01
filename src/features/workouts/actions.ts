@@ -1,6 +1,6 @@
 "use server";
 
-import { WorkoutStatus } from "@prisma/client";
+import { JobType, WorkoutStatus, type Job } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -8,7 +8,8 @@ import {
   parseWorkoutCompletionForm,
   validationMessage
 } from "@/features/workouts/form-parsing";
-import { workoutService } from "@/server/services";
+import { jobHandlers } from "@/server/jobs";
+import { jobService, workoutService } from "@/server/services";
 
 function optionalString(value: FormDataEntryValue | null) {
   if (typeof value !== "string") {
@@ -24,6 +25,41 @@ function workoutRedirect(error?: string): never {
   const suffix = error ? `?error=${encodeURIComponent(error)}` : "";
 
   redirect(`/today${suffix}`);
+}
+
+function jobInput(job: Job) {
+  return job.inputSnapshot && typeof job.inputSnapshot === "object"
+    ? (job.inputSnapshot as Record<string, unknown>)
+    : {};
+}
+
+async function runCompletedWorkoutFollowUps(completedWorkoutId: string) {
+  const jobsResult = await jobService.listRecentJobs();
+
+  if (!jobsResult.ok) {
+    return;
+  }
+
+  const jobOrder = [
+    JobType.POST_WORKOUT_FEEDBACK,
+    JobType.NEXT_WORKOUT_GENERATION,
+    JobType.COACH_NOTE_REFRESH
+  ];
+  const workerId = `server-action-${completedWorkoutId}`;
+
+  for (const type of jobOrder) {
+    const job = jobsResult.data.find((item) => {
+      const input = jobInput(item);
+
+      return (
+        item.type === type && input.completedWorkoutId === completedWorkoutId
+      );
+    });
+
+    if (job) {
+      await jobService.runJob(job, jobHandlers, { workerId });
+    }
+  }
 }
 
 export async function startWorkoutAction(formData: FormData) {
@@ -81,6 +117,7 @@ export async function completeWorkoutAction(formData: FormData) {
     workoutRedirect(validationMessage(result.error.details, result.error.message));
   }
 
+  await runCompletedWorkoutFollowUps(result.data.id);
   revalidatePath("/today");
   workoutRedirect();
 }

@@ -9,7 +9,9 @@ import {
   type AiInteraction,
   type AvailableLoad,
   type CoachNote,
+  type CompletedExerciseSet,
   type CompletedWorkout,
+  type CompletedWorkoutExercise,
   type Equipment,
   type Exercise,
   type PlannedWorkout,
@@ -51,6 +53,11 @@ export type PlannedWorkoutWithDetails = PlannedWorkout & {
   completedWorkouts: Array<
     CompletedWorkout & {
       coachFeedback: CoachNote | null;
+      exercises: Array<
+        CompletedWorkoutExercise & {
+          sets: CompletedExerciseSet[];
+        }
+      >;
     }
   >;
   exercises: Array<
@@ -643,7 +650,15 @@ export const generationService = {
           include: {
             completedWorkouts: {
               include: {
-                coachFeedback: true
+                coachFeedback: true,
+                exercises: {
+                  include: {
+                    sets: {
+                      orderBy: { orderIndex: "asc" }
+                    }
+                  },
+                  orderBy: { orderIndex: "asc" }
+                }
               },
               orderBy: { createdAt: "desc" }
             },

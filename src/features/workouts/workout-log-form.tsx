@@ -2,7 +2,7 @@
 
 import { SetStatus, WorkoutStatus } from "@prisma/client";
 import { Check, Minus, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -36,11 +36,18 @@ export interface WorkoutLogUi {
 }
 
 interface SetRowState {
+  actualDurationSeconds: string;
+  actualReps: string;
+  actualRpe: string;
+  actualWeightLb: string;
   id: string;
   isAdded: boolean;
   isVisible: boolean;
+  notes: string;
   orderIndex: number;
+  painFlag: boolean;
   plannedSet?: PlannedSetUi;
+  status: SetStatus;
   timed: boolean;
 }
 
@@ -87,10 +94,17 @@ function setTarget(set: PlannedSetUi) {
 
 function createAddedSet(orderIndex: number): SetRowState {
   return {
+    actualDurationSeconds: "",
+    actualReps: "",
+    actualRpe: "",
+    actualWeightLb: "",
     id: fieldKey("set"),
     isAdded: true,
     isVisible: true,
+    notes: "",
     orderIndex,
+    painFlag: false,
+    status: SetStatus.COMPLETED,
     timed: false
   };
 }
@@ -99,11 +113,20 @@ function initialExerciseState(exercise: PlannedExerciseUi): ExerciseState {
   return {
     extraSets: [],
     setRows: exercise.sets.map((set) => ({
+      actualDurationSeconds: set.targetDurationSeconds
+        ? Math.round(set.targetDurationSeconds).toString()
+        : "",
+      actualReps: set.targetReps?.toString() ?? "",
+      actualRpe: set.targetRpe ? Number(set.targetRpe).toFixed(1) : "",
+      actualWeightLb: poundsValue(set.targetWeightKg),
       id: set.id,
       isAdded: false,
       isVisible: true,
+      notes: "",
       orderIndex: set.orderIndex,
+      painFlag: false,
       plannedSet: set,
+      status: SetStatus.COMPLETED,
       timed: Boolean(set.targetDurationSeconds || set.targetDistanceMeters)
     }))
   };
@@ -140,11 +163,13 @@ function SetFields({
   exerciseId,
   onRemove,
   onTimedChange,
+  onValueChange,
   row
 }: {
   exerciseId?: string;
   onRemove: () => void;
   onTimedChange: (timed: boolean) => void;
+  onValueChange: (updates: Partial<SetRowState>) => void;
   row: SetRowState;
 }) {
   const key = row.id;
@@ -188,41 +213,50 @@ function SetFields({
         <select
           className={smallFieldClassName}
           name={`setStatus:${key}`}
-          defaultValue={SetStatus.COMPLETED}
+          onChange={(event) =>
+            onValueChange({ status: event.target.value as SetStatus })
+          }
+          value={row.status}
         >
           <option value={SetStatus.COMPLETED}>Logged</option>
           <option value={SetStatus.SKIPPED}>Skipped</option>
         </select>
         <input
           className={smallFieldClassName}
-          defaultValue={plannedSet?.targetReps ?? ""}
-          min="0"
+          inputMode="numeric"
           name={`actualReps:${key}`}
+          onChange={(event) => onValueChange({ actualReps: event.target.value })}
           placeholder="Reps"
-          type="number"
+          type="text"
+          value={row.actualReps}
         />
         <input
           className={smallFieldClassName}
-          defaultValue={poundsValue(plannedSet?.targetWeightKg ?? null)}
-          min="0"
+          inputMode="decimal"
           name={`actualWeightLb:${key}`}
+          onChange={(event) =>
+            onValueChange({ actualWeightLb: event.target.value })
+          }
           placeholder="lb"
-          step="0.5"
-          type="number"
+          type="text"
+          value={row.actualWeightLb}
         />
         <input
           className={smallFieldClassName}
-          defaultValue={
-            plannedSet?.targetRpe ? Number(plannedSet.targetRpe).toFixed(1) : ""
-          }
-          min="0"
+          inputMode="decimal"
           name={`actualRpe:${key}`}
+          onChange={(event) => onValueChange({ actualRpe: event.target.value })}
           placeholder="RPE"
-          step="0.5"
-          type="number"
+          type="text"
+          value={row.actualRpe}
         />
         <label className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-xs">
-          <input name={`painFlag:${key}`} type="checkbox" />
+          <input
+            checked={row.painFlag}
+            name={`painFlag:${key}`}
+            onChange={(event) => onValueChange({ painFlag: event.target.checked })}
+            type="checkbox"
+          />
           Pain
         </label>
       </div>
@@ -241,23 +275,24 @@ function SetFields({
       {row.timed ? (
         <input
           className={smallFieldClassName}
-          defaultValue={
-            plannedSet?.targetDurationSeconds
-              ? Math.round(plannedSet.targetDurationSeconds)
-              : ""
-          }
-          min="0"
+          inputMode="numeric"
           name={`actualDurationSeconds:${key}`}
+          onChange={(event) =>
+            onValueChange({ actualDurationSeconds: event.target.value })
+          }
           placeholder="Seconds"
-          type="number"
+          type="text"
+          value={row.actualDurationSeconds}
         />
       ) : null}
 
       <input
         className={smallFieldClassName}
         name={`setNotes:${key}`}
+        onChange={(event) => onValueChange({ notes: event.target.value })}
         placeholder="Set notes"
         type="text"
+        value={row.notes}
       />
     </div>
   );
@@ -315,6 +350,21 @@ export function WorkoutLogForm({ action, workout }: WorkoutLogFormProps) {
     }));
   }
 
+  function updateSetValues(
+    exerciseId: string,
+    rowId: string,
+    updates: Partial<SetRowState>
+  ) {
+    updateExercise(exerciseId, (state) => ({
+      extraSets: state.extraSets.map((row) =>
+        row.id === rowId ? { ...row, ...updates } : row
+      ),
+      setRows: state.setRows.map((row) =>
+        row.id === rowId ? { ...row, ...updates } : row
+      )
+    }));
+  }
+
   function addExtraExercise() {
     setExtraExercises((current) => [
       ...current,
@@ -360,6 +410,25 @@ export function WorkoutLogForm({ action, workout }: WorkoutLogFormProps) {
               ...exercise,
               sets: exercise.sets.map((row) =>
                 row.id === rowId ? { ...row, timed } : row
+              )
+            }
+          : exercise
+      )
+    );
+  }
+
+  function updateExtraSetValues(
+    exerciseId: string,
+    rowId: string,
+    updates: Partial<SetRowState>
+  ) {
+    setExtraExercises((current) =>
+      current.map((exercise) =>
+        exercise.id === exerciseId
+          ? {
+              ...exercise,
+              sets: exercise.sets.map((row) =>
+                row.id === rowId ? { ...row, ...updates } : row
               )
             }
           : exercise
@@ -458,6 +527,9 @@ export function WorkoutLogForm({ action, workout }: WorkoutLogFormProps) {
                     onTimedChange={(timed) =>
                       updateSetTimed(exercise.id, row.id, timed)
                     }
+                    onValueChange={(updates) =>
+                      updateSetValues(exercise.id, row.id, updates)
+                    }
                     row={row}
                   />
                 ))}
@@ -545,6 +617,9 @@ export function WorkoutLogForm({ action, workout }: WorkoutLogFormProps) {
                         onTimedChange={(timed) =>
                           updateExtraSetTimed(exercise.id, row.id, timed)
                         }
+                        onValueChange={(updates) =>
+                          updateExtraSetValues(exercise.id, row.id, updates)
+                        }
                         row={row}
                       />
                     </div>
@@ -573,10 +648,9 @@ export function WorkoutLogForm({ action, workout }: WorkoutLogFormProps) {
             <span className="text-muted-foreground">Overall RPE</span>
             <input
               className={`${fieldClassName} mt-1`}
-              min="0"
+              inputMode="decimal"
               name="overallRpe"
-              step="0.5"
-              type="number"
+              type="text"
             />
           </label>
           <label className="text-sm md:col-span-2">
