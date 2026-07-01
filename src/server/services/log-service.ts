@@ -73,7 +73,7 @@ function activeGoalTitles(goals: Goal[]) {
   return goals.map((goal) => goal.title).join(", ");
 }
 
-function buildExerciseTrends(workouts: WorkoutLogWithDetails[]) {
+export function buildExerciseTrends(workouts: WorkoutLogWithDetails[]) {
   const exerciseMap = new Map<
     string,
     {
@@ -125,6 +125,8 @@ function buildExerciseTrends(workouts: WorkoutLogWithDetails[]) {
       const firstWeighted = weighted[0];
       const latestWeighted = weighted[weighted.length - 1];
       const sessionIds = new Set(observations.map((item) => item.workoutId));
+      const hasMultipleWeightedSessions =
+        new Set(weighted.map((item) => item.workoutId)).size > 1;
 
       return {
         completedSets: trend.completedSets,
@@ -133,7 +135,7 @@ function buildExerciseTrends(workouts: WorkoutLogWithDetails[]) {
         latestReps: observations[observations.length - 1]?.reps ?? null,
         latestWeightKg: latestWeighted?.weightKg ?? null,
         loadChangeKg:
-          firstWeighted && latestWeighted
+          hasMultipleWeightedSessions && firstWeighted && latestWeighted
             ? Number(
                 (latestWeighted.weightKg! - firstWeighted.weightKg!).toFixed(3)
               )

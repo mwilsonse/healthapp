@@ -1,4 +1,10 @@
-import { JobStatus, JobType, WorkoutStatus, type Job } from "@prisma/client";
+import {
+  JobStatus,
+  JobType,
+  SetStatus,
+  WorkoutStatus,
+  type Job
+} from "@prisma/client";
 import {
   AlertCircle,
   CalendarPlus,
@@ -22,6 +28,7 @@ import {
   WorkoutLogForm,
   type WorkoutLogUi
 } from "@/features/workouts/workout-log-form";
+import { formatLoggedDuration } from "@/lib/duration";
 import { formatPoundsFromKilograms } from "@/lib/units";
 import { coachService, jobService, workoutService } from "@/server/services";
 
@@ -39,13 +46,7 @@ function formatDateTime(date: Date) {
 }
 
 function formatDuration(seconds?: number | null) {
-  if (!seconds) {
-    return null;
-  }
-
-  const minutes = Math.round(seconds / 60);
-
-  return `${minutes} min`;
+  return formatLoggedDuration(seconds);
 }
 
 function formatWeight(weightKg?: unknown) {
@@ -96,6 +97,33 @@ function targetLine(set: {
   return parts.join(" · ");
 }
 
+function setLine(parts: Array<string | null | undefined>) {
+  return parts.filter(Boolean).join(" · ");
+}
+
+function actualLine(set: {
+  actualDurationSeconds?: number | null;
+  actualReps?: number | null;
+  actualRpe?: unknown;
+  actualWeightKg?: unknown;
+  painFlag: boolean;
+  status: SetStatus;
+}) {
+  if (set.status === SetStatus.SKIPPED) {
+    return "Skipped";
+  }
+
+  return (
+    setLine([
+      set.actualReps ? `${set.actualReps} reps` : null,
+      formatWeight(set.actualWeightKg),
+      set.actualDurationSeconds ? formatDuration(set.actualDurationSeconds) : null,
+      set.actualRpe ? `RPE ${Number(set.actualRpe).toFixed(1)}` : null,
+      set.painFlag ? "Pain noted" : null
+    ]) || "Logged without set details"
+  );
+}
+
 function PageError({ message }: { message?: string }) {
   if (!message) {
     return null;
@@ -112,7 +140,7 @@ function fieldClassName() {
   return "h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 }
 
-function statusLabel(status: WorkoutStatus) {
+function statusLabel(status: WorkoutStatus | SetStatus) {
   switch (status) {
     case WorkoutStatus.IN_PROGRESS:
       return "In progress";
@@ -248,6 +276,106 @@ function workoutLogUi(workout: {
   };
 }
 
+function CompletedWorkoutLog({
+  completedLog,
+  plannedExercises
+}: {
+  completedLog: {
+    exercises: Array<{
+      id: string;
+      nameSnapshot: string;
+      notes: string | null;
+      plannedWorkoutExerciseId: string | null;
+      sets: Array<{
+        actualDurationSeconds: number | null;
+        actualReps: number | null;
+        actualRpe: unknown;
+        actualWeightKg: unknown;
+        id: string;
+        notes: string | null;
+        orderIndex: number;
+        painFlag: boolean;
+        status: SetStatus;
+      }>;
+      substitutionReason: string | null;
+    }>;
+  };
+  plannedExercises: Array<{ id: string; nameSnapshot: string }>;
+}) {
+  const plannedNames = new Map(
+    plannedExercises.map((exercise) => [exercise.id, exercise.nameSnapshot])
+  );
+
+  if (completedLog.exercises.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-4 text-sm leading-6 text-muted-foreground shadow-sm">
+        No completed set details were stored for this workout.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {completedLog.exercises.map((exercise) => {
+        const plannedName = exercise.plannedWorkoutExerciseId
+          ? plannedNames.get(exercise.plannedWorkoutExerciseId)
+          : null;
+        const isSubstitution =
+          plannedName !== null &&
+          plannedName !== undefined &&
+          plannedName !== exercise.nameSnapshot;
+        const isAdded = !exercise.plannedWorkoutExerciseId;
+
+        return (
+          <article
+            className="rounded-lg border border-border bg-card p-4 shadow-sm"
+            key={exercise.id}
+          >
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="font-medium">{exercise.nameSnapshot}</h3>
+              {isAdded || isSubstitution ? (
+                <span className="text-sm text-muted-foreground">
+                  {isAdded ? "Added exercise" : `Substituted for ${plannedName}`}
+                </span>
+              ) : null}
+            </div>
+            {exercise.substitutionReason ? (
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {exercise.substitutionReason}
+              </p>
+            ) : null}
+            {exercise.notes ? (
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {exercise.notes}
+              </p>
+            ) : null}
+            <div className="mt-3 divide-y divide-border rounded-md border border-border">
+              {exercise.sets.map((set) => (
+                <div className="grid gap-2 px-3 py-3 text-sm" key={set.id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">
+                      Set {set.orderIndex + 1}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {statusLabel(set.status)}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground">{actualLine(set)}</p>
+                  {set.notes ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {set.notes}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function TodayPage({ searchParams }: TodayPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const [workoutResult, chatActionsResult] = await Promise.all([
@@ -329,6 +457,7 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
   const completedLog = workout.completedWorkouts.find((log) =>
     finishedStatuses.includes(log.status)
   );
+  const showCompletedLog = Boolean(completedLog && isFinished);
   const coachFeedback = completedLog?.coachFeedback;
   const followUpStatusItems = [
     { job: feedbackJob, label: "Feedback" },
@@ -447,9 +576,10 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
               <input
                 className={`${fieldClassName()} mt-1`}
                 form="workout-log-form"
+                inputMode="numeric"
                 name="durationAdjustmentMinutes"
                 placeholder="0"
-                type="number"
+                type="text"
               />
             </label>
           </div>
@@ -458,12 +588,21 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
 
       <section className="space-y-4">
         <h2 className="text-base font-semibold">
-          {canLog ? "Log exercises" : "Exercises"}
+          {canLog
+            ? "Log exercises"
+            : showCompletedLog
+              ? "Completed exercises"
+              : "Exercises"}
         </h2>
         {canLog ? (
           <WorkoutLogForm
             action={completeWorkoutAction}
             workout={workoutLogUi(workout)}
+          />
+        ) : showCompletedLog && completedLog ? (
+          <CompletedWorkoutLog
+            completedLog={completedLog}
+            plannedExercises={workout.exercises}
           />
         ) : (
           <div className="space-y-3">
@@ -593,7 +732,7 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
             </div>
           ) : (
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Feedback will appear here after the worker finishes.
+              Feedback will appear here after the follow-up finishes.
             </p>
           )}
         </section>

@@ -176,7 +176,15 @@ export const workoutService = {
       include: {
         completedWorkouts: {
           include: {
-            coachFeedback: true
+            coachFeedback: true,
+            exercises: {
+              include: {
+                sets: {
+                  orderBy: { orderIndex: "asc" }
+                }
+              },
+              orderBy: { orderIndex: "asc" }
+            }
           },
           orderBy: { createdAt: "desc" }
         },
